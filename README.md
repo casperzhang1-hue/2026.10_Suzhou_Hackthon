@@ -8,6 +8,10 @@
 
 ## 模块地图
 
+> 🧩 **全栈 Demo（前端 + FastAPI + SQLite）**：一条命令起全套 —— `python start_fullstack.py`，
+> 说明见 [`FULLSTACK_DEMO.md`](FULLSTACK_DEMO.md)。后端存储已从 JSON 文件换成 SQLite，
+> 前端原型改为真读 `/api/today`、真写 `/api/records`（断网自动回落本地演示数据）。
+
 | 模块 | 职责 | 状态 | 入口 |
 |---|---|---|---|
 | A · 前端 | 上传 → 确认卡 → 今日屏 / 记忆屏 / 出分日屏，宠物五态 | ✅ **已接 `/api/today`（缺口行读真数据、断网回落）+ 识别升 r5**（15:28，`1684481`） | [`A-module-frontend/`](A-module-frontend/) |
