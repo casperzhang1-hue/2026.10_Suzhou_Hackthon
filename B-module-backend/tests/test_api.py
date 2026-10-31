@@ -51,8 +51,9 @@ def test_today_after_record(client):
     client.post("/api/records", json=_payload("2026-10-31"))
     r = client.get("/api/today").json()
     assert r["has_record"] is True
-    # 新用户 50，完成度 26/30≈0.87：0.6*50 + 0.4*87 = 64.8 -> 64
-    assert r["pet_state"] == "steady" and r["vitality"] == 64
+    # 口径与 A 的 mock-server 一致：完成度 = 58/80 = 0.725（不是正确率）
+    # 新用户 30：0.6*30 + 0.4*72.5 = 47 -> wilt
+    assert r["pet_state"] == "wilt" and r["vitality"] == 47
     assert r["gap"]["week_done"] == 1 and r["gap"]["owed"] == 4
     assert set(r) >= {"date", "has_record", "pet_state", "vitality", "user_state", "phrase_level", "gap"}
 

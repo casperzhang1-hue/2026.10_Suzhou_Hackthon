@@ -1,43 +1,80 @@
 """由记录推导每日信号，并回放出今日状态。全部是纯函数，today 参数由调用方传入。
 
-信号推导（signals_of）是 A 原型 finalizePayload 的移植，保持同一口径：
-  completion = 正确率；缺失时按时长/60 兜底，夹在 [0, 1.2]
-  energy     = 过载 32；否则有正确率 55+acc*30；否则 58
-  progress   = 60（原型常量）
+⚠️ 口径与 A 的 `A-module-frontend/mock-server` **完全一致**——那是演示数值的唯一事实源。
+如果这里另算一套，前端说「踏实 64」、后台说「蔫了 40」，路演现场没法解释。
+对拍命令见 tests/test_parity_a.py。
+
+  completion = min(1.2, 当日时长 / 80)          # 80 分钟算达标
+  energy     = 100 - 时长/6，熬夜 -30，夹 [0,100]  # 学越多越累，熬夜重罚
+  progress   = round(正确率 × 100)
+  vitality   = 新用户起点 30，逐日非对称累积
+
+今天还没记录时**不结算今天**：把最近一次真学的那天原样再算一遍（A 的 display 口径），
+否则每天 0 点就把今天按 0 分记账，等于早上打开 App 宠物永远「蔫了」。
 """
 from datetime import date, timedelta
 
 from .engine import compute_daily_state
 
-WEEK_TARGET = 5          # 每周目标天数（原型未定义，此处为后端暂定值，待与 D/A 确认）
-INITIAL_VITALITY = 50    # 新用户
-SLEEP_AFTER_DAYS = 7     # 与引擎 petStateOf 的休眠阈值一致
+WEEK_TARGET = 5          # 每周目标天数（与 A 的 seed.gap.week_target 一致）
+INITIAL_VITALITY = 30    # 新用户起点，与 A 原型 rollPrevVitality 一致
+SLEEP_AFTER_DAYS = 7     # 与引擎 pet_state_of 的休眠阈值一致
 
 PHRASE_LEVEL = {"vigour": "excellent", "steady": "good", "tired": "low", "wilt": "low", "sleep": "low"}
+
+# 没有记录的一天：完成度 0、精力满格（没学就不累）、正确率记 0
+_IDLE_SIGNALS = {"minutes": 0, "completion": 0.0, "energy": 100, "progress": 0}
 
 
 def _clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
 
-def _accuracy(rec: dict):
+def _js_round(x):
+    return int(x + 0.5) if x >= 0 else -int(-x + 0.5)
+
+
+def accuracy_of(rec: dict):
+    """优先取识别出的 accuracy；没有就用 modules 的正确数/题量算。"""
     acc = rec.get("accuracy")
     if isinstance(acc, (int, float)):
         return acc
     mods = rec.get("modules") or []
-    asked = sum(m["question_count"] for m in mods if m.get("correct_count") is not None)
-    right = sum(m["correct_count"] for m in mods if m.get("correct_count") is not None)
+    asked = sum(m.get("question_count") or 0 for m in mods if m.get("correct_count") is not None)
+    right = sum(m.get("correct_count") or 0 for m in mods if m.get("correct_count") is not None)
     return right / asked if asked else None
 
 
+def is_late_night(start_time, end_time, minutes: int) -> bool:
+    """熬夜：结束时间落在 0–6 点，或 22 点后开刷且超过 90 分钟。与 A 的 isLateNight 同逻辑。"""
+    def hour(t):
+        if not t:
+            return None
+        try:
+            return int(str(t).split(":")[0])
+        except ValueError:
+            return None
+
+    eh = hour(end_time)
+    if eh is not None and 0 <= eh < 6:
+        return True
+    sh = hour(start_time) if start_time else 21
+    return sh is not None and sh >= 22 and minutes > 90
+
+
 def signals_of(rec: dict) -> dict:
+    """单条记录 → 当日信号（A 的 finalizePayload 口径）。"""
     minutes = rec.get("duration_minutes") or 0
-    total = rec.get("total_questions") or 0
-    acc = _accuracy(rec)
-    overloaded = minutes > 200 or (total > 80 and acc is not None and acc < 0.55)
-    completion = _clamp(acc if acc is not None else minutes / 60, 0, 1.2)
-    energy = 32 if overloaded else (55 + acc * 30 if acc is not None else 58)
-    return {"completion": completion, "energy": energy, "progress": 60, "minutes": minutes}
+    acc = accuracy_of(rec)
+    late = is_late_night(rec.get("event_time"), rec.get("end_time"), minutes)
+    return {
+        "minutes": minutes,
+        "completion": min(1.2, minutes / 80),
+        "energy": _js_round(_clamp(100 - minutes / 6 - (30 if late else 0), 0, 100)),
+        "progress": _js_round((acc or 0) * 100),
+        "accuracy": acc,
+        "late_night": late,
+    }
 
 
 def _by_day(records: list[dict]) -> dict[date, list[dict]]:
@@ -49,43 +86,47 @@ def _by_day(records: list[dict]) -> dict[date, list[dict]]:
     return days
 
 
-def _merge_day(recs: list[dict]) -> dict:
-    """同一天多条记录：时长相加，其余信号取各自推导后的时长加权。"""
+def _day_signals(recs: list[dict]) -> dict:
+    """同一天多条记录：时长相加、正确率按题量加权（A 只取最后一条，这里更准但不改口径形态）。"""
     sigs = [signals_of(r) for r in recs]
     minutes = sum(s["minutes"] for s in sigs)
-    w = [(s["minutes"] or 1) if minutes else 1 for s in sigs]
+    weights = [max(s["minutes"], 1) for s in sigs]
+    acc_vals = [(s["accuracy"], w) for s, w in zip(sigs, weights) if s["accuracy"] is not None]
+    acc = (sum(a * w for a, w in acc_vals) / sum(w for _, w in acc_vals)) if acc_vals else None
     return {
-        "completion": sum(s["completion"] * wi for s, wi in zip(sigs, w)) / sum(w),
-        "energy": min(s["energy"] for s in sigs),     # 任何一次过载都算当天过载
-        "progress": 60,
         "minutes": minutes,
+        "completion": min(1.2, minutes / 80),
+        "energy": _js_round(_clamp(100 - minutes / 6 - (30 if any(s["late_night"] for s in sigs) else 0), 0, 100)),
+        "progress": _js_round((acc or 0) * 100),
+        "accuracy": acc,
+        "late_night": any(s["late_night"] for s in sigs),
     }
 
 
 def replay(records: list[dict], today: date) -> dict:
-    """从第一条记录起逐日回放，返回"现在该显示的状态"。
+    """逐日回放，返回"现在该显示的状态"。
 
-    ⚠️ 今天没记录时不结算今天（settle_to = 昨天）。
-    一天还没过完就按 completion=0 结算，等于每天早上打开 App 宠物都是「蔫了」——
-    这正是产品明令禁止的惩罚式反馈（PRD 05 反焦虑护栏）。今天一有记录入库，
-    下一次调用就会把今天算进来。
+    今天有记录 → 结算到今天；今天没记录 → 只结算到昨天，展示时把最近一次真学的那天
+    原样再算一遍（与 A 的 /api/today 一致，保证两边数字同一个）。
     """
     days = _by_day(records)
     if not days:
-        return {"state": None, "last_study": None, "missed_days": None, "settled_to": None}
+        return {"state": None, "last_study": None, "missed_days": 0, "settled_to": None, "signals": None}
+
     pending_today = today not in days
-    settle_to = today - timedelta(days=1) if pending_today else today
     vitality = INITIAL_VITALITY
     missed = 0
     state = None
+    last_study_sig = None
     d = min(days)
+    # 最后一天要结算到哪里：今天有记录就含今天，否则停在昨天
+    settle_to = today if not pending_today else today - timedelta(days=1)
     while d <= settle_to:
-        if d in days:
-            sig = _merge_day(days[d])
+        sig = _day_signals(days[d]) if d in days else _IDLE_SIGNALS
+        if sig["minutes"] > 0:
+            last_study_sig = sig
             missed = 0
         else:
-            # 没记录的日子：完成度 0，精力沿用中性值，时长 0（原型 'none' 预设：0.08/55/60）
-            sig = {"completion": 0.0, "energy": 55, "progress": 60, "minutes": 0}
             missed += 1
         state = compute_daily_state(
             prev_vitality=vitality, completion=sig["completion"], energy=sig["energy"],
@@ -93,10 +134,24 @@ def replay(records: list[dict], today: date) -> dict:
         )
         vitality = state["vitality"]
         d += timedelta(days=1)
-    # 对外汇报的「连续没学天数」把今天算进去（今天确实还没学），但状态本身按已结算的日子算
-    reported_missed = missed + (1 if pending_today else 0)
+
+    if pending_today:
+        # 今天还没学：用最近一次真学的那天作为展示态（A 的 display 口径）
+        if last_study_sig is None:
+            return {"state": state, "last_study": None, "missed_days": missed,
+                    "settled_to": settle_to, "signals": None}
+        today_missed = missed + 1         # 今天确实还没学
+        state = compute_daily_state(
+            prev_vitality=vitality, completion=last_study_sig["completion"],
+            energy=last_study_sig["energy"], progress=last_study_sig["progress"],
+            minutes=last_study_sig["minutes"], missed_days=today_missed,
+        )
+        return {"state": state, "last_study": max(k for k in days if k <= today),
+                "missed_days": today_missed, "settled_to": settle_to, "signals": last_study_sig}
+
     return {"state": state, "last_study": max(k for k in days if k <= today),
-            "missed_days": reported_missed, "settled_to": settle_to}
+            "missed_days": missed, "settled_to": settle_to,
+            "signals": _day_signals(days[today])}
 
 
 def _week_start(d: date) -> date:
@@ -104,7 +159,7 @@ def _week_start(d: date) -> date:
 
 
 def gap_of(records: list[dict], today: date) -> dict:
-    """本周缺口 = 目标天数 - 本周**真的学了**的天数。
+    """本周缺口 = 目标天数 - 本周**真的学了**的天数（时长 > 0）。
 
     ⚠️ 只数有时长的日子。seed 里 10-27 / 10-29 是「本周没学」（时长 0），
     按"有记录就算完成"会算成全勤、owed=0，演示里那句「本周欠 2 次」就没了。
@@ -112,7 +167,7 @@ def gap_of(records: list[dict], today: date) -> dict:
     start = _week_start(today)
     studied = {
         d for d, recs in _by_day(records).items()
-        if start <= d <= today and _merge_day(recs)["minutes"] > 0
+        if start <= d <= today and _day_signals(recs)["minutes"] > 0
     }
     done = len(studied)
     return {"week_target": WEEK_TARGET, "week_done": done, "owed": max(0, WEEK_TARGET - done)}
@@ -123,10 +178,11 @@ def today_view(records: list[dict], today: date) -> dict:
     days = _by_day(records)
     st = r["state"]
     if st is None:
-        # 新用户：没有任何记录
-        return {"date": today.isoformat(), "has_record": False, "pet_state": "sleep", "vitality": INITIAL_VITALITY,
-                "user_state": None, "phrase_level": "normal", "gap": gap_of(records, today),
-                "pending_today": True, "missed_days": 0}
+        return {"date": today.isoformat(), "has_record": False, "pending_today": True,
+                "pet_state": "sleep", "vitality": INITIAL_VITALITY, "user_state": None,
+                "phrase_level": "normal", "gap": gap_of(records, today),
+                "missed_days": 0, "detail": None}
+    sig = r["signals"] or {}
     return {
         "date": today.isoformat(),
         "has_record": today in days,
@@ -137,4 +193,12 @@ def today_view(records: list[dict], today: date) -> dict:
         "phrase_level": PHRASE_LEVEL[st["pet_state"]],
         "gap": gap_of(records, today),
         "missed_days": r["missed_days"],
+        "detail": {
+            "duration_minutes": sig.get("minutes", 0),
+            "accuracy": sig.get("accuracy"),
+            "energy": st["energy"],
+            "progress": st["progress"],
+            "completion": st["completion"],
+            "late_night": sig.get("late_night", False),
+        },
     }
