@@ -12,12 +12,15 @@
 |---|---|---|---|
 | A · 前端 | 上传 → 确认卡 → 今日屏 / 记忆屏 / 出分日屏，宠物五态 | ✅ 已入库（Vue 工程 + 仓鼠五态素材 + 四版原型 + mock 服务 + 45 天 seed + 三接口契约） | [`A-module-frontend/`](A-module-frontend/) |
 | **C · AI 学习截图识别** | 识别截图中的学习数据（来源 App / 时长 / 题量 / 正确率 / 模块明细），输出标准 JSON + 鼓励等级 | ✅ **已完成 v1.1-r5，验收通过（10/10 跑批）** | **[`C-module-recognition/`](C-module-recognition/)** |
-| B · 后端与状态引擎 | `POST /api/records` 入库、`GET /api/today` 今日状态（含缺口行）、`GET /api/memories`；状态引擎移植自 A 原型并对拍 | ✅ FastAPI + 29 个测试通过（14:07 合并入 main） | **[`B-module-backend/`](B-module-backend/)** |
+| B · 后端与状态引擎 | `POST /api/records` 入库、`GET /api/today` 今日状态（含缺口行）、`GET /api/memories`；状态引擎移植自 A 原型并对拍 | ✅ FastAPI + **36 个测试通过**（29 原有 + 4 集成 + 3 对拍） | **[`B-module-backend/`](B-module-backend/)** |
 | D · 数据与素材 | seed.json（45 天）、路演逐字稿、pitch.pdf、fallback.mp4 | 🔴 进行中 | [`D-module-materials/`](D-module-materials/) |
 
 > 各模块负责人把自己的代码放进对应目录，**只动自己的目录**；跨模块的接口契约以
 > [`C-module-recognition/docs/接口草案_C模块_识别结果JSON_v1.1.md`](C-module-recognition/docs/接口草案_C模块_识别结果JSON_v1.1.md)
 > 为单一事实源。需求与验收以 [`docs/考公陪跑Agent_PRD_v1.1.md`](docs/考公陪跑Agent_PRD_v1.1.md) 为准。
+>
+> ⚠️ **现行问题账本**：[`docs/全分支复核_问题汇总_1515.md`](docs/全分支复核_问题汇总_1515.md) —— 15:15 实测版，
+> 含 P0/P1/P2 全部未修项、责任人与验收方式。**模块状态以该文件为准，个人自评不算。**
 
 ## 分支状态（14:30 全员合并完毕）
 
@@ -25,7 +28,7 @@
 
 | 分支 | 负责人 | 独有内容 | 处理 |
 |---|---|---|---|
-| `Taoyu_Chen` | B · 陶宇 | FastAPI 后端 + 状态引擎 + 29 个 pytest + golden 对拍数据 | ✅ 已合并 |
+| `Taoyu_Chen` | B · 陶宇 | FastAPI 后端 + 状态引擎 + 36 个 pytest + golden 对拍数据 | ✅ 已合并 |
 | `Surui_Cao` | A · 曹苏睿 | 仅分支 README 横幅（A 的代码早就在 main） | ✅ 已合并，横幅已删 |
 | `nina_chen` | C · Nina | 无（已在 main） | ✅ 已包含 |
 | `Yuchen_Zhang` | D · 张宇辰 | 无（已在 main） | ✅ 已包含 |
@@ -63,7 +66,7 @@ cd A-module-frontend/mock-server && node server.js    # 零依赖，8787 端口�
 ```bash
 cd B-module-backend
 python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pytest -q                          # 29 个测试
+.venv/bin/python -m pytest -q                          # 36 个测试
 .venv/bin/python -m uvicorn app.main:app --port 8000   # 起服务
 ```
 
@@ -81,7 +84,7 @@ python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
 ├── docs/                        ← PRD v1.1 / 验收清单 / 四人任务卡 / 完整方案
 ├── prototype/                   ← SVG 版原型 Demo（历史参考）
 ├── A-module-frontend/           ← A：Vue 工程 + 仓鼠素材 + 原型 + mock 服务 + seed + 接口契约
-├── B-module-backend/            ← B：FastAPI 后端 + 状态引擎 + 29 个 pytest + golden 对拍
+├── B-module-backend/            ← B：FastAPI 后端 + 状态引擎 + 36 个 pytest + golden 对拍
 ├── C-module-recognition/        ← C：AI 学习截图识别（负责人：Nina）
 │   ├── README.md                ← C 模块完整文档（从这里看起）
 │   ├── recognize.js             ← 核心交付物：单文件识别模块
