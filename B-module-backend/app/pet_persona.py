@@ -585,24 +585,59 @@ def repeated(text: str, said_recently: list[str] | None = None,
     return None
 
 
+def _intent_key(text: str) -> str:
+    """这句话在问哪一类事。复读闸按它分堆，而不是按字面是不是同一句。
+
+    为什么要这一步：「再学一会儿吗」和「今天还用学吗」一个字都不同，
+    问的却是同一件事，答案相似是正常的。按字面分堆会把它们判成两件事，
+    于是后一句被当成「答非所问」拦掉——实测就这么白白掉了一次兜底，
+    他听到的是一句模板，而它其实答得没错。
+    """
+    t = text or ""
+    which = _which_name(t)
+    if which:
+        return "name:" + which
+    if any(w in t for w in _CAP_ASK):
+        return "capability"
+    if any(w in t for w in _RELATION_ASK):
+        return "relation"
+    if _asks_advice(t):
+        return "advice"
+    account = _asks_account(t)
+    if account:
+        # 问模块时把模块名带上：「资料分析怎么样」和「数量关系怎么样」是两本账，
+        # 答案不该因为「同属 data 类型」就被允许重复。
+        name = next((n for n in _MODULE_VOCAB if n in t), "") if account == "module" else ""
+        return f"account:{account}:{name}"
+    if _asks_how_know(t):
+        return "provenance"
+    if looks_sad(t):
+        return "comfort"
+    return "normal"
+
+
 def split_recent_replies(history: list[dict] | None, text: str) -> tuple[list[str], list[str]]:
-    """把它说过的话分成两堆：(答别的问题时说的, 答同一个问题时说的)。
+    """把它说过的话分成两堆：(答别的事时说的, 答同一件事时说的)。
 
     两堆用不同的松紧：
-    - 答别的问题时说的，一律不许再出现——那是答非所问，用户截图里骂的就是这个；
-    - 答同一个问题时说的，只挡逐字照抄（同一件事问两遍，事实就那些，
+    - 答别的事时说的，一律不许再出现——那是答非所问，用户截图里骂的就是这个；
+    - 答同一件事时说的，只挡逐字照抄（同一件事问两遍，事实就那些，
       答得一样是正常的；但两口气字都一模一样，界面上看着就像卡住了）。
+
+    「同一件事」按 :func:`_intent_key` 判，不按原句字面——他把「再学一会儿吗」
+    换成「今天还用学吗」，问的还是那件事。
     """
     other: list[str] = []
     same: list[str] = []
     asked = ""
+    mine = _intent_key(text)
     for turn in (history or []):
         role = turn.get("role")
         content = (turn.get("content") or "").strip()
         if role == "user":
             asked = content
         elif role == "assistant" and content:
-            (same if _bare(asked) == _bare(text) else other).append(content)
+            (same if _intent_key(asked) == mine else other).append(content)
     return other[-3:], same[-2:]
 
 
@@ -612,8 +647,20 @@ def split_recent_replies(history: list[dict] | None, text: str) -> tuple[list[st
 # 问账要的是主句，先给数，别的都不许抢。
 _ASK_DATA = ("怎么样", "多少", "几道", "几题", "正确率", "成绩", "进度", "错了几", "对了几",
              "统计", "排名", "最毛", "最弱", "哪块", "哪里差", "短板", "哪个模块",
-             "学得如何", "做得如何", "学了多少", "做了多少")
+             "学得如何", "做得如何", "学了多少", "做了多少",
+             # 「今天学了多久」「看了多长时间」是最常问的一种说法，早先漏了：
+             # 它不带「多少」，于是整句落进 normal，手上没有 answer，模型挑一样念，
+             # 问「学了多久」答的是「数量关系那道题你算对了」。
+             "多久", "多长时间", "多少时间", "学了多长",
+             # 「我今天做了什么」问的也是账，主语是他自己
+             "做了什么", "做了些啥", "学了什么", "做了啥")
 _WEAK_WORDS = ("最毛", "最弱", "哪块", "哪里差", "短板", "哪个模块", "不行的是")
+
+# 周进度是另一本账：今天 82 分钟答不了「这周还差几天」。
+# 只在同时出现「周/星期」和「还差/差几/几天」时才走这一支，
+# 否则「这周正确率多少」会被答成「4/5 天」——那是另一个问题的答案。
+_WEEK_WORDS = ("这周", "本周", "这一周", "这个星期", "这星期", "一周", "周目标")
+_WEEK_ASK = ("还差", "差几", "差多少", "几天", "几次", "进度", "够不够", "达标")
 
 # 「你叫什么」和「我该叫你什么」是两个问题，答法相反：
 # 前者答我自己的名字（团团），后者答**他的名字**。
@@ -627,7 +674,7 @@ _NAME_ASK = ("我叫什么", "我叫啥", "我叫什么名字", "我的名字", 
 # 「我应该叫你什么」问的是我的名字（yours）。差一个字的顺序，答法相反。
 _IDENTITY_ASK = ("你叫什么", "你叫啥", "你的名字", "你名字", "你是谁", "你是什么",
                  "你是ai", "你是AI", "你是机器人", "你是程序", "你几岁", "你多大",
-                 "叫你什么", "叫你啥", "怎么叫你", "怎么称呼你")
+                 "叫你什么", "叫你啥", "怎么叫你", "怎么称呼你", "你怎么称呼")
 
 # 「不知道」的几种说法。它可以说不知道，但不许猜一个名字糊过去。
 _DONT_KNOW = ("不知道", "不记得", "没记住", "没告诉我", "还没说", "你告诉我",
@@ -660,8 +707,12 @@ def _which_name(text: str) -> str:
 
 
 def _asks_account(text: str) -> str:
-    """他在问哪本账。返回 ``weakest`` / ``module`` / ``today`` / ``""``（不问账）。"""
+    """他在问哪本账。返回 ``weakest`` / ``week`` / ``module`` / ``today`` / ``""``（不问账）。"""
     t = text or ""
+    # 周进度先判：「这周还差几天」里一个 _ASK_DATA 的词都没有（它不说「多少」），
+    # 放在下面那道总闸之后就会被漏成闲聊。
+    if any(w in t for w in _WEEK_WORDS) and any(w in t for w in _WEEK_ASK):
+        return "week"
     if not any(w in t for w in _ASK_DATA):
         return ""
     if any(w in t for w in _WEAK_WORDS):
@@ -691,6 +742,15 @@ def _answer_view(kind: str, *, today: dict, modules: list[dict], text: str) -> d
         worst = min(pool, key=lambda m: m["accuracy_pct"])
         return {"kind": "weakest", "module": worst["name"],
                 "accuracy_pct": worst["accuracy_pct"], "questions": worst["questions"]}
+    if kind == "week":
+        # 周进度是另一本账。以前它落进 normal，模型手上只有今天的数和模块正确率，
+        # 被问「这周还差几天」只能含糊过去，或者干脆把「今天 82 分钟」当答案。
+        gap = (today or {}).get("gap") or {}
+        done, target = gap.get("week_done") or 0, gap.get("week_target") or 0
+        if not target:
+            return {"kind": "no_data"}
+        return {"kind": "week", "done": done, "target": target,
+                "owed": max(target - done, 0)}
     if kind == "module":
         name = next((n for n in _MODULE_VOCAB if n in (text or "")), "")
         hit = next((m for m in pool if m["name"] == name), None)
@@ -775,10 +835,22 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
         v = facts.get("verdict") or {}
         if not any(w in text for w in _ADVICE_WORDS):
             return False, "他在问该不该学，你却只安慰，没给结论"
+        # 结论跟算出来的相反——这比含糊更糟：含糊是没答，反着答是答错了。
+        # 「至少一句安慰」这种闸放得过「你辛苦了，早点休息」，
+        # 也放得过「该停了」配一句「再刷二十分钟」——后者是自相矛盾。
+        # 放在分钟数校验之前：说反了方向时，得先告诉它方向错了，
+        # 只报「分钟数不对」它会以为改个数就行。
+        conflict = _verdict_conflict(text, v.get("verdict"))
+        if conflict:
+            return False, conflict
         # 说了「再 N 分钟」时，N 必须是算出来的那个。模型爱顺手改成「半小时」「20 分钟」
         if v.get("verdict") == "keep" and v.get("again_minutes"):
-            if v["again_minutes"] not in {int(n) for n in re.findall(r"\d+", text)}:
-                return False, f"建议的时长不是算出来的 {v['again_minutes']} 分钟"
+            said = {int(n) for n in re.findall(r"\d+", text)}
+            if v["again_minutes"] not in said:
+                if said:
+                    return False, f"建议的时长不是算出来的 {v['again_minutes']} 分钟"
+                return False, f"结论是还能再来一会儿，你一个分钟数都没给（该是算出来的 {v['again_minutes']} 分钟）"
+
 
     # 不在判断模式，就不许承诺「再学多久」。
     # 实测「我不累啊」这种闲聊，它自己接了一句「还能再学 15 分钟」——
@@ -853,11 +925,13 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
     # 他在问今天的账，却把账安到他嘴上：「82 分钟，你自己跟我说的」——
     # 那数是从记录里算的，他没说过。这类出处错位比报错数更伤信任，
     # 因为他会想「我什么时候说过」。
-    if facts.get("mode") in ("data", "address", "identity") and \
-            re.search(r"你自己跟我?说的|你亲口说的|你确认过", text):
-        # 这三类问题一个字都没问到出处。搬出处是拿「来源」顶「答案」，
-        # 而且「你自己跟我说的」十次有九次是假的——他没说过。
-        # 刻意不拦「记录里写着」：那句是真的，拦了只会把真话逼成兜底。
+    #
+    # 只对「账」生效。名字类不能一起拦：他报名字时「你叫林一，你自己跟我说的」
+    # 是**真话**（名字确实是他说的），一起拦就把真话逼成兜底——
+    # 实测问「你叫什么」，本来答得好好的，两次都被这句拦下，最后掉进模板。
+    account_words = facts.get("mode") == "data" or (
+        facts.get("mode") in ("address", "identity") and not facts.get("known_name"))
+    if account_words and re.search(r"你自己跟我?说的|你亲口说的|你确认过", text):
         return False, "他没问出处，却把话安到了他嘴上"
 
     # 把旁白当成他的原话：只有真的存在「他说的」记忆时，才允许说「你说过」
@@ -900,6 +974,16 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
     stray = [int(n) for n in re.findall(r"\d+", text) if int(n) not in allowed]
     if stray:
         return False, f"出现事实里没有的数字 {stray}"
+
+    # 他在问今天的账，回答里一个数都没有，就是不认账。
+    # 清单里「data 出口必须有分钟数」以前只写在文档上：它回「唔，你今天做了不少呢」，
+    # 所有闸都放过去了——听着没毛病，但一个字也没答他问的那笔账。
+    # 放在最后：先说更具体的错（编数字、说错科目），这句话只是兜底要求。
+    if facts.get("mode") == "data":
+        ans = facts.get("answer") or {}
+        if ans.get("kind") in ("today", "week", "weakest", "module") \
+                and not re.search(r"\d", text):
+            return False, "他在问账，你一个数都没给"
 
     # 提到模块名时，数字必须是这个模块的（防「数字是真的但安错了人」）
     ok, reason = brain.check(text, facts)
@@ -958,6 +1042,10 @@ def build_messages(user_text: str, *, facts: dict, history: list[dict] | None = 
             hint = ("\n他在问哪一块最弱。第一句就直接说模块名和正确率（照 answer.module 和"
                     "answer.accuracy_pct 说，比如「数量关系最毛，52%」），第二句说题量或者做个小动作。"
                     "不要提截图，不要提他说过的话，不要报今天的分钟数。20 到 35 字。")
+        elif kind == "week":
+            hint = ("\n他在问这周的进度。第一句直接说本周做到几天、目标几天（照 answer.done 和"
+                    "answer.target 说，比如「这周 4 天了，还差 1 天」），"
+                    "再用一个小动作收尾。不要报今天的分钟数，不要报模块，不要提截图。20 到 35 字。")
         elif kind == "module":
             hint = ("\n他在问这一科的成绩。先说这一科的正确率（answer.accuracy_pct），"
                     "再说多少题（answer.questions）。只报这两个数，别扯别的科目。20 到 35 字。")
@@ -1001,9 +1089,19 @@ def build_messages(user_text: str, *, facts: dict, history: list[dict] | None = 
     # 但不说「别抄这句」风险更大——实测后者十次里七次逐字重来。
     _, asked_before = split_recent_replies(history, user_text)
     if asked_before:
+        # 问到第二遍、第三遍，光说「换个说法」是不够的：账就那几个数，
+        # 它能换的只有词。所以直接给一个**结构**，让它有地方可换：
+        #   第二遍 → 先说为什么，再说结论（和第一遍的顺序反着来）；
+        #   第三遍起 → 别复述结论了，先说一个小动作，再把结论带出来。
+        # 这是把「复读」变成「换个侧重点」，界面上读起来像它想了两遍。
+        if len(asked_before) == 1:
+            angle = ("这次换个结构：上一遍是先说结论，这次先说为什么（那个数），再说结论。")
+        else:
+            angle = ("这已经是第 {} 遍了，别再从结论开头：先说一个具体的小动作"
+                     "（我把瓜子收起来了 / 我趴你手边），再把结论带出来。".format(len(asked_before) + 1))
         hint += ("\n这是他刚问过的同一件事，你上一遍的原话是：「{}」。"
-                 "这次必须换个说法：不许用上面那段里的开头四个字，也不许把它整句搬过来。"
-                 "数一个字都不许变。".format(asked_before[-1][:40]))
+                 "数一个字都不许变，但话不能跟上一遍雷同：不许用上面那段里的开头四个字，"
+                 "也不许把它整句搬过来。{}".format(asked_before[-1][:40], angle))
     msgs.append({
         "role": "user",
         "content": f"事实（JSON，只能用这里面的数字，sources 是你唯一能指的出处）：{facts_json}"
@@ -1023,7 +1121,14 @@ def retry_messages(messages: list[dict], rejected: str, reason: str) -> list[dic
     因为它不知道该改哪个点；说「这一句里不许出现分钟数」，它一次就改对了。
     """
     specific = ""
-    if "答成了我自己的名字" in (reason or "") or "却没叫出来" in (reason or "") \
+    if "给了继续学的时长" in (reason or ""):
+        # 矛盾必须先说「结论是什么」，否则它只会把分钟数删掉，结论还是错的
+        specific = "结论已经算好了：现在不该继续。这一句不许出现任何分钟数，也不许说「再学一会儿」。"
+    elif "叫他别学了" in (reason or ""):
+        specific = "结论是还能再来一会儿。照 verdict.again_minutes 说，别叫他停，别说早点睡。"
+    elif "一个数都没给" in (reason or ""):
+        specific = "先把答案里的那个数说出来（多少分钟、几天、正确率），别的都放后面。"
+    elif "答成了我自己的名字" in (reason or "") or "却没叫出来" in (reason or "") \
             or "却没说不记得" in (reason or ""):
         # 名字这类问题，它最爱把主语搞反：问他叫什么，答「你叫我团团」。
         # 光说「答错了」没用，得把「谁是谁」再摆一遍。
@@ -1035,8 +1140,11 @@ def retry_messages(messages: list[dict], rejected: str, reason: str) -> list[dic
     elif "原样说了一遍" in (reason or ""):
         # 同一件事他问了两遍。这时候不能叫它「别重复」——账就那笔，数还得说。
         # 要改的是句子的壳：开头不能跟上一遍沾边，但同一笔账得说全。
+        # 只说「换个说法」它换不动（能换的词就那么几个），所以给一个结构：
+        # 先动作、再结论，跟上一遍的顺序反过来。
         specific = ("他问的还是同一件事。数一个都不许改，但这句话不能跟上一遍雷同："
-                    "开头必须换掉，别再用上一遍那前几个字，也别整句照搬。")
+                    "开头必须换掉，别再用上一遍那前几个字，也别整句照搬。"
+                    "换个结构：先说一个具体的小动作，再把结论带出来。")
     elif "复读" in (reason or ""):
         specific = ("那句是他刚才已经听过的话。换一句全新的，直接回答他这一次问的问题，"
                     "不许接上一句，也不许换个说法把上一句重说一遍。")
@@ -1086,11 +1194,49 @@ _ADVICE_ASK = (
     "能歇", "能不能歇", "能不能停", "能不能休息", "可以歇", "可以停", "可以休息",
     "收工", "到此为止", "够了没", "够了吗", "够不够", "今天就", "不用学", "别学了",
     "是不是该", "有必要吗", "会不会", "来得及", "太赶", "赶得上",
+    # 「再学一会儿吗」「还能再学点吗」——主语被省掉了，句式分支要求带「我/今天」，
+    # 于是这类最常见的一问一直落在 normal，它答成一句鼓励，等于没给主意。
+    "再学一会", "再练一会", "再来一会", "还能学", "还能再", "还能撑", "再撑一会",
 )
 
 # 有了结论才叫回答。这些话里一个都没有，就是在拿安慰当答案
 _ADVICE_WORDS = ("该", "别", "不用", "可以", "再", "先", "停", "睡", "歇", "换", "做",
                  "补", "够", "继续", "收工", "明天", "算了")
+
+# 结论和算出来的相反，是这只宠物最危险的一种错：它刚算完「今天该停了」，
+# 嘴上却来一句「再刷二十分钟」——他照着做，明天更累，还会觉得是它让的。
+# 所以只在**明确矛盾**上拦，不要求它必须用到某个词（那样误杀太多，一说就掉兜底）。
+# 刻意只认时间量词：switch 那一支本来就要说「回头看错题」，
+# 把「再看两道」也算成继续，会把正确的建议打成错。
+_CONTINUE_INTENT = re.compile(r"(?:再|继续|接着|多)[^，。！？]{0,5}?(?:分钟|小时|一会|会儿)")
+# 「我再陪你十分钟」「再聊会儿」不是学习承诺，是它自己留下的动作。
+# 这些字出现在同一个片段里就不算「继续学」——不然 stop 时它说句贴心话都要被打回。
+_NOT_STUDY = ("陪", "睡", "躺", "坐", "抱", "吃", "喝", "聊", "玩", "看你")
+# 刻意不收「收工」「去睡」：「再 20 分钟，做完就收工」是 keep 的正常说法，
+# 收进来会把正确答案打成错的。只留明确否定学习的说法。
+_STOP_INTENT = ("别学了", "不用学", "别刷了", "别做了", "今天就到这", "今天到这儿",
+                "早点睡", "歇着吧")
+
+
+def _continues_study(text: str) -> bool:
+    """这句里有没有「接着学多久」的意思。"""
+    for m in _CONTINUE_INTENT.finditer(text or ""):
+        if not any(w in m.group(0) for w in _NOT_STUDY):
+            return True
+    return False
+
+
+def _verdict_conflict(text: str, verdict: str | None) -> str:
+    """这句话跟算好的结论是不是反的。反了就返回原因，没反返回空串。"""
+    if not verdict:
+        return ""
+    t = text or ""
+    if verdict in ("stop", "switch") and _continues_study(t):
+        return ("结论是「{}」，你却给了继续学的时长".format("停" if verdict == "stop" else "换个轻的"))
+    if verdict in ("keep", "start") and not _continues_study(t) \
+            and any(w in t for w in _STOP_INTENT):
+        return "结论是还能再来一会儿，你却叫他别学了"
+    return ""
 
 # 固定句式抓不全。实测「那我今天还要再学一会儿吗」就漏了——
 # 它长得不像「该不该」，但它就是在要一个主意，于是模型自己编了个「15分钟」。
@@ -1170,10 +1316,6 @@ def fallback(user_text: str, facts: dict | None = None, repeat: bool = False) ->
         return "我能看你发的截图，帮你把账记下来；你说过的事我也记着。"
     if facts.get("mode") == "relation":
         return "喜欢呀，我天天在这儿等你来。"
-    if facts.get("mode") == "capability":
-        return "我能看你发的截图，帮你把账记下来；你说过的事我也记着。"
-    if facts.get("mode") == "relation":
-        return "喜欢呀，我天天在这儿等你来。"
     if facts.get("mode") in ("address", "identity"):
         name = facts.get("known_name")
         if facts["mode"] == "identity":
@@ -1217,6 +1359,11 @@ def _plain_answer(facts: dict, repeat: bool = False) -> str:
         if ans.get("questions"):
             text += f"，{ans['questions']} 题"
         return head + text + tail
+    if kind == "week":
+        done, target = ans.get("done") or 0, ans.get("target") or 0
+        if ans.get("owed"):
+            return head + f"这周 {done}/{target} 天，还差 {ans['owed']} 天" + tail
+        return head + f"这周 {done}/{target} 天，数够了" + tail
     if kind == "empty":
         return "今天还没看到你的记录，我不瞎猜。"
     if kind == "no_data":

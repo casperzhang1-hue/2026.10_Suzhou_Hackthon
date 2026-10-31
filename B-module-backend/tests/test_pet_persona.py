@@ -132,10 +132,13 @@ def test_安慰模式_事实包里没有任何数字():
 
 
 def test_数据模式_数字照旧带口径():
+    # 「我今天做了什么」问的是账，不是要主意（早先它被判成 advice，模型自己编了个时长）。
+    # 现在走 data：第一句该说什么由 answer 算好，模块和正确率照旧带口径。
     facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text="我今天做了什么")
     nums = []
     _all_numbers(facts, nums)
-    assert facts["mode"] == "normal"
+    assert facts["mode"] == "data"
+    assert facts["answer"] == {"kind": "today", "minutes": 130, "accuracy_pct": 60}
     assert 130 in nums and 60 in nums
     assert facts["weakest_module"] == "数量关系"
 
@@ -216,7 +219,7 @@ def test_闸_拦下中文写法的数字():
 
 def test_闸_中文写法和库里对得上就放行():
     """「六成」就是 60%，事实里正是这个数——它是真话，拦下来只会掉兜底。"""
-    ok, why = P.check_reply("你今天对了六成呢", facts=_facts(), user_text="今天怎么样")
+    ok, why = P.check_reply("你今天 130 分钟，对了六成呢", facts=_facts(), user_text="今天怎么样")
     assert ok, why
 
 
@@ -241,7 +244,7 @@ def test_闸_拦下把记忆安到用户头上():
 
 
 def test_闸_不误杀正常叮嘱():
-    ok, _ = P.check_reply("你记得吃点东西再学呀。", facts=_facts(), user_text="我在学")
+    ok, _ = P.check_reply("你记得吃点东西再学呀。", facts=_facts("我在学"), user_text="我在学")
     assert ok
 
 
@@ -340,7 +343,7 @@ def test_重试时_同一件事重问要给的是换说法_不是别说话():
 
 
 def test_复读_没有历史时一律放行():
-    ok, _ = P.check_reply("唔，我在呢。", facts=_facts(), user_text="在吗")
+    ok, _ = P.check_reply("唔，我在呢。", facts=_facts("在吗"), user_text="在吗")
     assert ok
 
 
@@ -438,7 +441,7 @@ def test_接口_复读上一句会被打回重说(client, monkeypatch):
 
     def fake(*a, **k):
         calls["n"] += 1
-        return old if calls["n"] == 1 else "你上次问的那块，我再翻翻记录。"
+        return old if calls["n"] == 1 else "数量关系最毛，52%，我再帮你翻翻。"
 
     monkeypatch.setattr(pet_llm, "chat", fake)
     d = client.post("/api/pet/say", json={
@@ -666,3 +669,117 @@ def test_名字_忘了能删_删了就不叫了(client, monkeypatch):
     assert client.delete(f"/api/memories/{name_item['id']}").json()["deleted"] is True
     d = client.post("/api/pet/say", json={"text": "你应该叫我什么", "history": []}).json()
     assert d["facts"]["known_name"] is None
+
+
+# ---------- 复读的「同一件事」按意思判，不按字面 ----------
+# 实测（2026-11-01 真机）：先问「再学一会儿吗」，再问「今天还用学吗」，
+# 它答的还是那句「今天够了，82分钟过了80的线」。两句问的是一件事，答案像是对的，
+# 但按字面分堆把它判成了「答非所问」，打回两次，最后掉兜底——他听到一句模板。
+# 所以「同一件事」要按意图判：同一个意思换个问法，答案相似是正常的。
+
+def test_复读_换个问法问同一件事不算答非所问():
+    hist = [{"role": "user", "content": "再学一会儿吗"},
+            {"role": "assistant", "content": "今天够了，82分钟过了80的线。"}]
+    other, same = P.split_recent_replies(hist, "今天还用学吗")
+    assert other == [] and same == ["今天够了，82分钟过了80的线。"]
+
+
+def test_复读_换了件事仍然算答非所问():
+    hist = [{"role": "user", "content": "今天怎么样"},
+            {"role": "assistant", "content": "今天 130 分钟，正确率 60%。"}]
+    other, same = P.split_recent_replies(hist, "你喜欢我吗")
+    assert other == ["今天 130 分钟，正确率 60%。"] and same == []
+
+
+def test_复读_换成问另一科就是另一本账():
+    hist = [{"role": "user", "content": "资料分析怎么样"},
+            {"role": "assistant", "content": "资料分析 62%，做了 240 题。"}]
+    other, same = P.split_recent_replies(hist, "数量关系怎么样")
+    assert other and not same
+
+
+def test_名字类可以说你自己跟我说的():
+    """名字确实是他说的，这句话是真话。以前一并拦下，问「你叫什么」两次被打回，
+    最后掉进模板——真话被自己的闸挡住，是最冤的一种「笨」。"""
+    with_name = [{"quote": "我叫林一", "type": "name", "name": "林一", "days_since": 1}]
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=with_name, text="你应该叫我什么")
+    ok, why = P.check_reply("你叫林一呀，你自己跟我说的，我记着呢。", facts=facts,
+                            user_text="你应该叫我什么")
+    assert ok, why
+
+
+def test_账类仍然不许安到他嘴上():
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text="今天怎么样")
+    ok, why = P.check_reply("今天 130 分钟，你自己跟我说的。", facts=facts, user_text="今天怎么样")
+    assert not ok and "安到了他嘴上" in why
+
+
+# ---------- 复读的「同一件事」按意思判，不按字面 ----------
+# 实测（2026-11-01 真机）：先问「再学一会儿吗」，再问「今天还用学吗」，
+# 它答的还是那句「今天够了，82分钟过了80的线」。两句问的是一件事，答案像是对的，
+# 但按字面分堆把它判成了「答非所问」，打回两次，最后掉兜底——他听到一句模板。
+# 所以「同一件事」要按意图判：同一个意思换个问法，答案相似是正常的。
+
+def test_复读_换个问法问同一件事不算答非所问():
+    hist = [{"role": "user", "content": "再学一会儿吗"},
+            {"role": "assistant", "content": "今天够了，82分钟过了80的线。"}]
+    other, same = P.split_recent_replies(hist, "今天还用学吗")
+    assert other == [] and same == ["今天够了，82分钟过了80的线。"]
+
+
+def test_复读_换了件事仍然算答非所问():
+    hist = [{"role": "user", "content": "今天怎么样"},
+            {"role": "assistant", "content": "今天 130 分钟，正确率 60%。"}]
+    other, same = P.split_recent_replies(hist, "你喜欢我吗")
+    assert other == ["今天 130 分钟，正确率 60%。"] and same == []
+
+
+def test_复读_换成问另一科就是另一本账():
+    hist = [{"role": "user", "content": "资料分析怎么样"},
+            {"role": "assistant", "content": "资料分析 62%，做了 240 题。"}]
+    other, same = P.split_recent_replies(hist, "数量关系怎么样")
+    assert other and not same
+
+
+def test_名字类可以说你自己跟我说的():
+    """名字确实是他说的，这句话是真话。以前一并拦下，问「你叫什么」两次被打回，
+    最后掉进模板——真话被自己的闸挡住，是最冤的一种「笨」。"""
+    with_name = [{"quote": "我叫林一", "type": "name", "name": "林一", "days_since": 1}]
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=with_name, text="你应该叫我什么")
+    ok, why = P.check_reply("你叫林一呀，你自己跟我说的，我记着呢。", facts=facts,
+                            user_text="你应该叫我什么")
+    assert ok, why
+
+
+def test_账类仍然不许安到他嘴上():
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text="今天怎么样")
+    ok, why = P.check_reply("今天 130 分钟，你自己跟我说的。", facts=facts, user_text="今天怎么样")
+    assert not ok and "安到了他嘴上" in why
+
+
+def test_问第二遍给结构_第三遍换侧重点():
+    """光说「换个说法」它换不动——账就几个数，能换的词就那么几个。
+    所以第二遍给一个相反的语序（先说为什么再说结论），第三遍起直接换侧重点
+    （先说小动作，再把结论带出来）。"""
+    facts = _facts("今天还用学吗")
+    one = [{"role": "user", "content": "今天还用学吗"},
+           {"role": "assistant", "content": "今天够了，82分钟过了80的线。"}]
+    two = one + [{"role": "user", "content": "今天还用学吗"},
+                 {"role": "assistant", "content": "今天够啦，都82分钟了。"}]
+    a = P.build_messages("今天还用学吗", facts=facts, history=one)[-1]["content"]
+    b = P.build_messages("今天还用学吗", facts=facts, history=two)[-1]["content"]
+    assert "先说为什么" in a and "第 3 遍" in b
+
+
+def test_问第二遍给结构_第三遍换侧重点():
+    """光说「换个说法」它换不动——账就几个数，能换的词就那么几个。
+    所以第二遍给一个相反的语序（先说为什么再说结论），第三遍起直接换侧重点
+    （先说小动作，再把结论带出来）。"""
+    facts = _facts("今天还用学吗")
+    one = [{"role": "user", "content": "今天还用学吗"},
+           {"role": "assistant", "content": "今天够了，82分钟过了80的线。"}]
+    two = one + [{"role": "user", "content": "今天还用学吗"},
+                 {"role": "assistant", "content": "今天够啦，都82分钟了。"}]
+    a = P.build_messages("今天还用学吗", facts=facts, history=one)[-1]["content"]
+    b = P.build_messages("今天还用学吗", facts=facts, history=two)[-1]["content"]
+    assert "先说为什么" in a and "第 3 遍" in b

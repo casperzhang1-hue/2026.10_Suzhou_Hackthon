@@ -139,7 +139,9 @@ def test_闸_拦下库里没有的科目():
 
 
 def test_闸_放行库里有的科目():
-    ok, _ = P.check_reply("判断推理你今天做得还行。", facts=_facts(), user_text="今天怎么样",
+    # 用一句不是问账的话做底：问账的时候另有「必须给数」的闸，
+    # 这条用例只测科目白名单，别让别的闸抢答。
+    ok, _ = P.check_reply("判断推理你今天做得还行。", facts=_facts("在吗"), user_text="在吗",
                           known_modules=KNOWN)
     assert ok
 
