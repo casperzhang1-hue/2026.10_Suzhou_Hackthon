@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>仓鼠五态素材包 · 预览与用法</title>
+<link rel="stylesheet" href="hamster.css" />
+<style>
+  :root{
+    --bg:#f6f4f0; --card:#fff; --ink:#2b2622; --sub:#7a6f64;
+    --line:#e5ded4; --accent:#c0563a; --code:#3d3731;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.7 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:32px 20px 60px}
+  .wrap{max-width:860px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 6px}
+  .lede{color:var(--sub);margin:0 0 28px;font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:18px}
+  h2{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  h2::before{content:"";width:3px;height:14px;background:var(--accent);border-radius:2px}
+
+  /* 预览台 */
+  .stage{display:flex;gap:26px;align-items:flex-end;flex-wrap:wrap}
+  .stage-box{flex:0 0 auto;background:var(--bg);border:1px solid var(--line);border-radius:12px;
+             padding:18px 22px;display:flex;align-items:flex-end;justify-content:center;min-height:280px;min-width:280px}
+  .stage-box.dark{background:#2a2521;border-color:#3d3731}
+  .ctrl{flex:1;min-width:240px}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);
+         padding:7px 14px;border-radius:8px;cursor:pointer;transition:.15s}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .meta{font-size:13px;color:var(--sub);line-height:2}
+  .meta b{color:var(--ink);font-weight:600}
+
+  /* 代码 */
+  pre{background:var(--code);color:#f0ebe4;border-radius:10px;padding:16px 18px;
+      overflow:auto;font:12.5px/1.75 "SFMono-Regular",Consolas,monospace;margin:0}
+  pre .c{color:#9c948a}
+  .copy{float:right;margin-top:-6px}
+  .copy:hover{color:var(--accent)}
+  .field{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;font-size:13px}
+  .field input{border:1px solid var(--line);border-radius:7px;padding:6px 10px;font:inherit;width:120px}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--sub);font-weight:500;font-size:12.5px}
+  td:first-child{white-space:nowrap}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;margin-right:6px}
+
+  .unlock{display:flex;gap:14px;flex-wrap:wrap}
+  .unlock figure{margin:0;text-align:center}
+  .unlock img{width:96px;height:144px;object-fit:contain;background:var(--bg);
+              border:1px solid var(--line);border-radius:10px}
+  .unlock figcaption{font-size:12px;color:var(--sub);margin-top:6px}
+  .tip{font-size:12.5px;color:var(--sub);background:#faf7f2;border-left:3px solid var(--accent);
+       padding:10px 14px;border-radius:0 8px 8px 0;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>仓鼠五态素材包 v1.0</h1>
+  <p class="lede">透明背景 WebP + CSS 动效。整目录丢进 GitHub 仓库，用 jsDelivr CDN 全团队统一调用。</p>
+
+  <!-- 预览台 -->
+  <div class="card">
+    <h2>预览</h2>
+    <div class="stage">
+      <div class="stage-box" id="box">
+        <div class="hamster" data-state="yuanqi" id="pet" style="--hamster-size:240px"></div>
+      </div>
+      <div class="ctrl">
+        <div class="btns" id="btns">
+          <button data-s="yuanqi" class="on">元气</button>
+          <button data-s="tashi">踏实</button>
+          <button data-s="pibei">疲惫</button>
+          <button data-s="nianle">蔫了</button>
+          <button data-s="xiumian">休眠</button>
+        </div>
+        <div class="btns">
+          <button id="bgBtn">背景：浅色</button>
+          <button id="waitBtn">试一下等待态</button>
+        </div>
+        <div class="meta">
+          当前：<b id="now">元气 yuanqi</b><br />
+          尺寸：<b>512×512</b> WebP（显示 240px ≈ @2.1x）<br />
+          五张合计：<b>231 KB</b>，解锁件 4 张 246 KB
+        </div>
+      </div>
+    </div>
+    <div class="tip">切到「深色背景」看边缘——没有白边残渣就说明是真透明通道。</div>
+  </div>
+
+  <!-- CDN 引用 -->
+  <div class="card">
+    <h2>CDN 引用代码（填仓库自动生成）</h2>
+    <div class="field">
+      <span>github.com/</span>
+      <input id="ghUser" value="your-name" />
+      <span>/</span>
+      <input id="ghRepo" value="hamster-assets" />
+      <span>@</span>
+      <input id="ghRef" value="v1.0.0" style="width:90px" />
+      <span style="color:var(--sub)">（打 tag 锁版本，别用 main）</span>
+    </div>
+    <pre id="codeOut"></pre>
+    <button class="copy" id="copyBtn">复制</button>
+  </div>
+
+  <!-- 状态表 -->
+  <div class="card">
+    <h2>五态对照</h2>
+    <table>
+      <tr><th>态</th><th>data-state</th><th>动效</th><th>触发（C 模块 level）</th></tr>
+      <tr><td><span class="sw" style="background:#f0b849"></span>元气</td><td>yuanqi</td><td>呼吸 2s + 星光</td><td>excellent</td></tr>
+      <tr><td><span class="sw" style="background:#9cb98a"></span>踏实</td><td>tashi</td><td>呼吸 3.2s</td><td>good</td></tr>
+      <tr><td><span class="sw" style="background:#c98f63"></span>疲惫</td><td>pibei</td><td>缓慢摇晃 4.5s</td><td>normal</td></tr>
+      <tr><td><span class="sw" style="background:#8d8579"></span>蔫了</td><td>nianle</td><td>每 6.5s 抖一下</td><td>low</td></tr>
+      <tr><td><span class="sw" style="background:#5d564d"></span>休眠</td><td>xiumian</td><td>静止</td><td>今天没学 / 非学习图</td></tr>
+    </table>
+  </div>
+
+  <!-- 解锁件 -->
+  <div class="card">
+    <h2>羁绊解锁件（img/unlock/）</h2>
+    <div class="unlock" id="unlock"></div>
+  </div>
+
+</div>
+
+<script src="hamster.js"></script>
+<script>
+  var pet = document.getElementById('pet');
+  var now = document.getElementById('now');
+
+  document.getElementById('btns').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    [].forEach.call(this.querySelectorAll('button'), function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    var s = b.dataset.s;
+    HamsterKit.set(pet, s);
+    now.textContent = HamsterKit.LABEL[s] + ' ' + s;
+  });
+
+  var box = document.getElementById('box');
+  var bgBtn = document.getElementById('bgBtn');
+  bgBtn.addEventListener('click', function () {
+    var dark = box.classList.toggle('dark');
+    bgBtn.textContent = '背景：' + (dark ? '深色' : '浅色');
+    bgBtn.classList.toggle('on', dark);
+  });
+
+  var wt;
+  document.getElementById('waitBtn').addEventListener('click', function () {
+    clearTimeout(wt);
+    pet.classList.add('waiting');
+    this.textContent = '等待中…';
+    var self = this;
+    wt = setTimeout(function () {
+      pet.classList.remove('waiting');
+      self.textContent = '试一下等待态';
+    }, 3000);
+  });
+
+  // 解锁件
+  var items = [
+    ['unlock_hat_navy.webp', '藏青帽'],
+    ['unlock_hat_ginger.webp', '姜黄帽'],
+    ['unlock_scarf_cream.webp', '奶白麻花围巾'],
+    ['unlock_scarf_blue.webp', '雾蓝条纹围巾']
+  ];
+  document.getElementById('unlock').innerHTML = items.map(function (it) {
+    return '<figure><img src="img/unlock/' + it[0] + '" alt="' + it[1] + '"><figcaption>' + it[1] + '</figcaption></figure>';
+  }).join('');
+
+  // CDN 代码生成
+  var out = document.getElementById('codeOut');
+  function buildCode() {
+    var u = document.getElementById('ghUser').value || 'your-name';
+    var r = document.getElementById('ghRepo').value || 'hamster-assets';
+    var v = document.getElementById('ghRef').value || 'v1.0.0';
+    var base = 'https://cdn.jsdelivr.net/gh/' + u + '/' + r + '@' + v + '/hamster-kit';
+    out.innerHTML =
+'<span class="c">&lt;!-- ① 引 CSS（图片路径相对 CSS，CDN 会自动解析到同目录 img/） --&gt;</span>\n' +
+'&lt;link rel="stylesheet" href="' + base + '/hamster.css"&gt;\n\n' +
+'<span class="c">&lt;!-- ② 放一个 div，改 data-state 就切态 --&gt;</span>\n' +
+'&lt;div class="hamster" data-state="yuanqi" style="--hamster-size:240px"&gt;&lt;/div&gt;\n\n' +
+'<span class="c">&lt;!-- ③ 可选：引脚本，用 C 模块的 level 直接切态 --&gt;</span>\n' +
+'&lt;script src="' + base + '/hamster.js"&gt;&lt;\/script&gt;\n' +
+'&lt;script&gt;\n' +
+'  HamsterKit.setFromRecord(document.querySelector(\'.hamster\'), rec);\n' +
+'  <span class="c">// 或手动：HamsterKit.set(el, \'pibei\')</span>\n' +
+'&lt;\/script&gt;';
+  }
+  ['ghUser', 'ghRepo', 'ghRef'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', buildCode);
+  });
+  buildCode();
+
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    var txt = out.innerText;
+    navigator.clipboard.writeText(txt).then(function () {
+      var b = document.getElementById('copyBtn');
+      b.textContent = '已复制';
+      setTimeout(function () { b.textContent = '复制'; }, 1500);
+    });
+  });
+</script>
+</body>
+</html>
