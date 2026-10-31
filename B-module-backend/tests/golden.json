@@ -1,0 +1,273 @@
+[
+  {
+    "name": "正常",
+    "input": {
+      "prevVitality": 70,
+      "completion": 0.8,
+      "energy": 70,
+      "progress": 68,
+      "minutes": 58,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 0.8,
+      "netMinutes": 58,
+      "energy": 70,
+      "progress": 68,
+      "prevVitality": 70,
+      "vitality": 74,
+      "userState": "稳",
+      "petState": "steady"
+    }
+  },
+  {
+    "name": "断签1天",
+    "input": {
+      "prevVitality": 70,
+      "completion": 0,
+      "energy": 62,
+      "progress": 60,
+      "minutes": 0,
+      "missedDays": 1
+    },
+    "expected": {
+      "completion": 0,
+      "netMinutes": 0,
+      "energy": 62,
+      "progress": 60,
+      "prevVitality": 70,
+      "vitality": 52,
+      "userState": "稳",
+      "petState": "wilt"
+    }
+  },
+  {
+    "name": "断签7天",
+    "input": {
+      "prevVitality": 40,
+      "completion": 0,
+      "energy": 50,
+      "progress": 50,
+      "minutes": 0,
+      "missedDays": 7
+    },
+    "expected": {
+      "completion": 0,
+      "netMinutes": 0,
+      "energy": 50,
+      "progress": 50,
+      "prevVitality": 40,
+      "vitality": 30,
+      "userState": "稳",
+      "petState": "sleep"
+    }
+  },
+  {
+    "name": "过载",
+    "input": {
+      "prevVitality": 75,
+      "completion": 1.2,
+      "energy": 31,
+      "progress": 58,
+      "minutes": 372,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 1.2,
+      "netMinutes": 372,
+      "energy": 31,
+      "progress": 58,
+      "prevVitality": 75,
+      "vitality": 93,
+      "userState": "过载",
+      "petState": "tired"
+    }
+  },
+  {
+    "name": "回归",
+    "input": {
+      "prevVitality": 25,
+      "completion": 0.93,
+      "energy": 70,
+      "progress": 68,
+      "minutes": 58,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 0.9,
+      "netMinutes": 58,
+      "energy": 70,
+      "progress": 68,
+      "prevVitality": 25,
+      "vitality": 52,
+      "userState": "稳",
+      "petState": "wilt"
+    }
+  },
+  {
+    "name": "新用户",
+    "input": {
+      "prevVitality": 50,
+      "completion": 0.6,
+      "energy": 60,
+      "progress": 50,
+      "minutes": 30,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 0.6,
+      "netMinutes": 30,
+      "energy": 60,
+      "progress": 50,
+      "prevVitality": 50,
+      "vitality": 54,
+      "userState": "稳",
+      "petState": "wilt"
+    }
+  },
+  {
+    "name": "平台期",
+    "input": {
+      "prevVitality": 70,
+      "completion": 0.8,
+      "energy": 70,
+      "progress": 30,
+      "minutes": 58,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 0.8,
+      "netMinutes": 58,
+      "energy": 70,
+      "progress": 30,
+      "prevVitality": 70,
+      "vitality": 74,
+      "userState": "平台期",
+      "petState": "steady"
+    }
+  },
+  {
+    "name": "崩溃前兆",
+    "input": {
+      "prevVitality": 70,
+      "completion": 0.3,
+      "energy": 30,
+      "progress": 30,
+      "minutes": 10,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 0.3,
+      "netMinutes": 10,
+      "energy": 30,
+      "progress": 30,
+      "prevVitality": 70,
+      "vitality": 60,
+      "userState": "崩溃前兆",
+      "petState": "steady"
+    }
+  },
+  {
+    "name": "完成度越界",
+    "input": {
+      "prevVitality": 100,
+      "completion": 1.5,
+      "energy": 70,
+      "progress": 68,
+      "minutes": 58,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 1.5,
+      "netMinutes": 58,
+      "energy": 70,
+      "progress": 68,
+      "prevVitality": 100,
+      "vitality": 100,
+      "userState": "稳",
+      "petState": "vigour"
+    }
+  },
+  {
+    "name": "活力地板",
+    "input": {
+      "prevVitality": 0,
+      "completion": 0,
+      "energy": 70,
+      "progress": 68,
+      "minutes": 58,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 0,
+      "netMinutes": 58,
+      "energy": 70,
+      "progress": 68,
+      "prevVitality": 0,
+      "vitality": 0,
+      "userState": "稳",
+      "petState": "sleep"
+    }
+  },
+  {
+    "name": "临界0.5",
+    "input": {
+      "prevVitality": 60,
+      "completion": 0.5,
+      "energy": 70,
+      "progress": 68,
+      "minutes": 58,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 0.5,
+      "netMinutes": 58,
+      "energy": 70,
+      "progress": 68,
+      "prevVitality": 60,
+      "vitality": 56,
+      "userState": "稳",
+      "petState": "steady"
+    }
+  },
+  {
+    "name": "临界0.49",
+    "input": {
+      "prevVitality": 60,
+      "completion": 0.49,
+      "energy": 70,
+      "progress": 68,
+      "minutes": 58,
+      "missedDays": 0
+    },
+    "expected": {
+      "completion": 0.5,
+      "netMinutes": 58,
+      "energy": 70,
+      "progress": 68,
+      "prevVitality": 60,
+      "vitality": 57,
+      "userState": "稳",
+      "petState": "steady"
+    }
+  },
+  {
+    "name": "缺失minutes",
+    "input": {
+      "prevVitality": 70,
+      "completion": 0.8,
+      "energy": 70,
+      "progress": 68
+    },
+    "expected": {
+      "completion": 0.8,
+      "netMinutes": 0,
+      "energy": 70,
+      "progress": 68,
+      "prevVitality": 70,
+      "vitality": 74,
+      "userState": "稳",
+      "petState": "steady"
+    }
+  }
+]

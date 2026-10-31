@@ -10,6 +10,7 @@
 | 模块 | 职责 | 状态 | 入口 |
 |---|---|---|---|
 | A · 前端 | 上传 → 确认卡 → 今日屏 / 记忆屏 / 出分日屏，宠物五态 | 联调中 | `A-module-frontend/`（A 推送后可见） |
+| B · 后端与状态引擎 | `POST /api/records` 入库、`GET /api/today` 今日状态（含缺口行）、`GET /api/memories`；状态引擎移植自 A 原型并对拍 | ✅ 接口与 29 个测试通过，待接 seed | **[`B-module-backend/`](B-module-backend/)** |
 | **C · AI 学习截图识别** | 识别截图中的学习数据（来源 App / 时长 / 题量 / 正确率 / 模块明细），输出标准 JSON + 鼓励等级 | ✅ **已完成 v1.1-r5，验收通过** | **[`C-module-recognition/`](C-module-recognition/)** |
 | D · 数据与素材 | 测试截图、话术素材、演示物料 | 进行中 | `D-module-materials/`（D 推送后可见） |
 
@@ -31,6 +32,7 @@
 ```
 2026.10_Suzhou_Hackthon/
 ├── README.md                     ← 本文件（仓库总览）
+├── B-module-backend/             ← B 模块：后端与状态引擎（FastAPI，负责人：Taoyu）
 └── C-module-recognition/         ← C 模块：AI 学习截图识别（负责人：Nina）
     ├── README.md                 ← C 模块完整文档（从这里看起）
     ├── recognize.js              ← 核心交付物：单文件识别模块
