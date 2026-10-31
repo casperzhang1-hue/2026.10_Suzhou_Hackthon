@@ -1,3 +1,31 @@
+# 🌿 Surui_Cao · A 模块工作分支
+
+> 这是 **A（曹苏睿）** 的个人工作分支：A 的所有改动都在本分支提交，验证 OK 后再合回 `main`。
+> **回滚只影响本分支，不影响其他人。** 本分支与 main 的差异 = 本 README 顶部这一段 + 后续 A 的提交。
+> 合并回 main 时，删掉本横幅段即可（横幅以下与 main 的 README 保持一致）。
+
+## 本分支上 A 的全部工作内容
+
+| 目录 | 内容 | 说明 |
+|---|---|---|
+| [`A-module-frontend/app/`](A-module-frontend/app/) | Vue 3 工程 | `npm install && npm run dev`（5173） |
+| [`A-module-frontend/hamster-kit/`](A-module-frontend/hamster-kit/) | ★ 仓鼠五态素材 | 全队统一形象入口（CSS + JS + 透明 WebP） |
+| [`A-module-frontend/原型/`](A-module-frontend/原型/) | 四版原型 HTML | `仓鼠陪跑_原型_接真数据_单文件版.html` 双击即开 |
+| [`A-module-frontend/mock-server/`](A-module-frontend/mock-server/) | ★ 零依赖 Node 后端 | `node server.js` 起 8787，B 交付前全链路靠它 |
+| [`A-module-frontend/seed/`](A-module-frontend/seed/) | ★ 45 天自洽假数据 | D 可直接替换 |
+| [`A-module-frontend/contract/`](A-module-frontend/contract/) | ★ 三接口契约 | B 照字段表实现 |
+| [`A-module-frontend/test-images/`](A-module-frontend/test-images/) | 10 张真实截图 | `test5.jpg` 是路演主图（唯一无黄条） |
+
+**A 分支 CDN**（jsDelivr 支持按分支引用，联调时拿最新版）：
+
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/casperzhang1-hue/2026.10_Suzhou_Hackthon@Surui_Cao/A-module-frontend/hamster-kit/hamster.css">
+```
+
+详细文档 → [`A-module-frontend/README.md`](A-module-frontend/README.md)
+
+---
+
 # 监督小宠 · 2026.10 苏州黑客松
 
 > AI 学习监督助手：拍一张学习截图 → AI 识别学习数据 → 宠物养成式鼓励反馈
