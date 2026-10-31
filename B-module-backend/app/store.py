@@ -1,13 +1,15 @@
-"""内存 + JSON 落盘。单用户、单进程。
+"""SQLite 存储层（原 JSON 文件版的等价替换）。
 
-读取顺序：data/store.json（运行期数据）> data/seed.json（D 交付的种子）> 空。
-写入只写 store.json，seed.json 不会被改动；删掉 store.json 即可回到种子状态。
+对外接口保持不变：`records` / `memories` / `add_record()`，
+上游 service 与 main 无需改动，40 个既有测试即回归网。
+
+读取顺序：SQLite（data/hamster.db）> 首次自动从 data/seed.json 导入
+写入：同时落库与内存缓存，保证同一进程内读到的状态即时可见
 """
-import json
-import os
-import threading
 from datetime import datetime
 from pathlib import Path
+
+from .db import Database, import_seed, insert_record, load_memories, load_records
 
 DEDUPE_WINDOW_SECONDS = 120  # 同一张图在窗口内重复提交视为同一条记录
 
@@ -15,20 +17,14 @@ DEDUPE_WINDOW_SECONDS = 120  # 同一张图在窗口内重复提交视为同一�
 class Store:
     def __init__(self, data_dir: Path):
         self.data_dir = Path(data_dir)
-        self.store_path = self.data_dir / "store.json"
+        self.db_path = self.data_dir / "hamster.db"
         self.seed_path = self.data_dir / "seed.json"
-        self._lock = threading.Lock()
-        self.records: list[dict] = []
-        self.memories: list[dict] = []
-        self._load()
 
-    def _load(self):
-        for path in (self.store_path, self.seed_path):
-            if path.exists():
-                data = json.loads(path.read_text(encoding="utf-8"))
-                self.records = list(data.get("records", []))
-                self.memories = list(data.get("memories", []))
-                return
+        self.db = Database(self.db_path)
+        self.seeded_rows = import_seed(self.db.conn, self.seed_path)
+
+        self.records: list[dict] = load_records(self.db.conn)
+        self.memories: list[dict] = load_memories(self.db.conn)
 
     @staticmethod
     def _is_duplicate(a: dict, b: dict) -> bool:
@@ -38,21 +34,27 @@ class Store:
         gap = abs(datetime.fromisoformat(a["confirmed_at"]) - datetime.fromisoformat(b["confirmed_at"]))
         return same and gap.total_seconds() < DEDUPE_WINDOW_SECONDS
 
+    def _next_id(self) -> str:
+        """生成不冲突的 record_id —— 不再覆盖同号旧记录。"""
+        n = len(self.records) + 1
+        existing = {r.get("record_id") for r in self.records}
+        while f"rec_{n:04d}" in existing:
+            n += 1
+        return f"rec_{n:04d}"
+
     def add_record(self, rec: dict) -> dict:
-        with self._lock:
+        with self.db.lock:
             for old in self.records:
                 if self._is_duplicate(old, rec):
                     return old
-            rec = {**rec, "record_id": f"rec_{len(self.records) + 1:04d}"}
+            rec = {**rec, "record_id": self._next_id()}
+            insert_record(self.db.conn, rec)
+            self.db.conn.commit()
             self.records.append(rec)
-            self._flush()
             return rec
 
-    def _flush(self):
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        tmp = self.store_path.with_suffix(".tmp")
-        tmp.write_text(
-            json.dumps({"records": self.records, "memories": self.memories}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        os.replace(tmp, self.store_path)  # 原子替换，进程被杀也不会留下半截文件
+    def close(self) -> None:
+        try:
+            self.db.conn.close()
+        except Exception:
+            pass

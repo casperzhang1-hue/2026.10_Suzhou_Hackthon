@@ -4,3 +4,8 @@ dist/
 *.log
 .DS_Store
 **/mock-server/data/records.json
+# 运行期数据库（删掉即回到 seed 状态，不入库）
+**/data/hamster.db
+**/data/hamster.db-shm
+**/data/hamster.db-wal
+__pycache__/

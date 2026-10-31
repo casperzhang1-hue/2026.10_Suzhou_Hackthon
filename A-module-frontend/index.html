@@ -1081,6 +1081,7 @@ function recToPayload(rec){
     accuracy: acc,
     partial: partial,
     source_app: rec.source_app || null,
+    _rec: rec,
     fields: [
       {k:'日期', v:(rec.event_date || '今天') + (rec.event_time ? ' ' + rec.event_time : '')},
       {k:'模块', v: mods.length ? mods.join(' · ') : '未识别'},
@@ -1254,6 +1255,7 @@ $('#btnConfirm').onclick = function(){
   var p = currentPayload ? syncPayloadFromRows(currentPayload) : (PRESETS[currentPreset] || PRESETS.good);
   currentPayload = null;
   currentPreset = null;
+  postRecordAndRefresh(p);              /* 落库：POST /api/records，失败不影响本地演示 */
   setTimeout(function(){ applyPreset(p); }, 220);
 };
 
@@ -1275,6 +1277,147 @@ $('#btnFbConfirm').onclick = function(){
   setTimeout(function(){ applyPreset(payload); }, 220);
 };
 $$('[data-preset].link').forEach(function(b){ b.onclick = function(){ pickPreset(b.dataset.preset); }; });
+
+/* =========================================================
+   5. 后端对接（FastAPI + SQLite）
+   ---------------------------------------------------------
+   · 启动探测后端，连通则用 GET /api/today 覆盖本地状态
+   · 确认入库走 POST /api/records，真正写进 SQLite
+   · 任何一步失败都回落本地演示数据 —— 断网 / 后端没起也能演
+   ========================================================= */
+var API = {
+  candidates: ['http://127.0.0.1:8000', 'http://127.0.0.1:8020', 'http://127.0.0.1:8787'],
+  base: null,
+  online: false,
+  info: null
+};
+
+var SERVER_PET = { yuanqi:'vigour', tashi:'steady', pibei:'tired', nianle:'wilt', xiumian:'sleep' };
+
+function apiUrl(path){ return API.base + path; }
+
+function apiGet(path){
+  return fetch(apiUrl(path), {cache:'no-store'}).then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
+}
+
+function showDbBadge(text){
+  var b = $('#dbBadge');
+  if(!b){
+    b = document.createElement('div');
+    b.id = 'dbBadge';
+    b.style.cssText = 'position:fixed;right:14px;top:14px;z-index:9999;padding:6px 12px;border-radius:999px;' +
+      'font:12px/1.6 -apple-system,"PingFang SC",sans-serif;color:#F4E9DC;' +
+      'background:rgba(24,18,14,.82);border:1px solid rgba(244,233,220,.18);pointer-events:none';
+    document.body.appendChild(b);
+  }
+  b.textContent = text;
+}
+
+function probeBackend(){
+  var i = 0;
+  function next(){
+    if(i >= API.candidates.length){ API.online = false; return Promise.resolve(false); }
+    var base = API.candidates[i++];
+    return fetch(base + '/api/health', {cache:'no-store'})
+      .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(info){
+        API.base = base;
+        API.online = true;
+        API.info = info;
+        console.log('[后端] 已连接 ' + base, info);
+        showDbBadge('SQLite 已连接 · ' + info.records + ' 条记录');
+        return true;
+      })
+      .catch(function(){ return next(); });
+  }
+  return next();
+}
+
+function applyServerToday(t){
+  if(!t) return;
+  if(typeof t.vitality === 'number') APP.vitality = t.vitality;
+  if(t.pet_state && SERVER_PET[t.pet_state]) APP.state = SERVER_PET[t.pet_state];
+  if(t.gap && typeof t.gap.owed === 'number') APP.gap = t.gap.owed;
+  APP.missed = t.missed_days || 0;
+  APP.hasRecord = !!t.has_record;
+  renderHome();
+  var hint = $('#gapHint');
+  if(hint) hint.textContent = t.has_record ? '今天已记下，这周的账我记着' : '明天补一次就平了';
+}
+
+function syncFromServer(){
+  if(!API.online) return Promise.resolve(null);
+  return apiGet('/api/today?user_id=demo_zhang')
+    .then(function(t){ applyServerToday(t); return t; })
+    .catch(function(e){ console.warn('[后端] 读取失败，回落本地状态', e); return null; });
+}
+
+/* 识别结果里的模块可能不合法（correct > question），入库前先洗一遍，避免 422 */
+function sanitizeModules(rec){
+  var out = [];
+  ((rec && rec.modules) || []).forEach(function(m){
+    if(!m || !m.name) return;
+    var q = parseInt(m.question_count, 10);
+    if(isNaN(q) || q < 0) return;
+    var c = (m.correct_count === null || m.correct_count === undefined) ? null : parseInt(m.correct_count, 10);
+    if(c !== null && (isNaN(c) || c > q || c < 0)) c = null;
+    out.push({name: m.name, question_count: q, correct_count: c});
+  });
+  return out;
+}
+
+function todayISO(){
+  var d = new Date();
+  var m = String(d.getMonth() + 1); if(m.length < 2) m = '0' + m;
+  var dd = String(d.getDate()); if(dd.length < 2) dd = '0' + dd;
+  return d.getFullYear() + '-' + m + '-' + dd;
+}
+
+function postRecordAndRefresh(p){
+  if(!API.online || !p) return;
+  var rec = p._rec || null;
+  var body = {
+    record: {
+      event_date: (rec && rec.event_date) || todayISO(),
+      event_time: (rec && rec.event_time) || null,
+      duration_minutes: p.minutes || 0,
+      source_app: p.source_app || (rec && rec.source_app) || '手工录入',
+      modules: sanitizeModules(rec),
+      total_questions: p.total || 0,
+      accuracy: (typeof p.accuracy === 'number') ? Math.round(p.accuracy * 100) / 100 : null
+    },
+    recognition_ref: rec ? {schema_version: rec.schema_version || '1.1', confidence: 0.9} : null,
+    edited_fields: [],
+    confirmed_at: new Date().toISOString(),
+    user_id: 'demo_zhang'
+  };
+  fetch(apiUrl('/api/records'), {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  }).then(function(r){
+    if(!r.ok){
+      return r.text().then(function(t){ throw new Error('HTTP ' + r.status + ' ' + t.slice(0, 120)); });
+    }
+    return r.json();
+  }).then(function(res){
+    console.log('[入库] 已写入 SQLite ' + res.record_id, body);
+    if(API.info) API.info.records = (API.info.records || 0) + 1;
+    showDbBadge('SQLite 已连接 · ' + (API.info ? API.info.records : '?') + ' 条记录 · 刚记下');
+    return syncFromServer();
+  }).catch(function(e){
+    console.warn('[入库] 失败，保留本地状态：' + e.message);
+  });
+}
+
+/* 启动：先探后端，连通就拉今日状态；不连通保持本地演示数据 */
+probeBackend().then(function(ok){
+  if(ok) return syncFromServer();
+  console.log('[后端] 未连接，使用本地演示数据（离线可演）');
+});
 
 /* tabs */
 $$('#tabs button').forEach(function(b){

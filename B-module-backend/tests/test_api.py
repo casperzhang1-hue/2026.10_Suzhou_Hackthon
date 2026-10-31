@@ -1,9 +1,25 @@
 import json
+import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+
+
+def _saved_records(data_dir):
+    """直接查 SQLite，验证「真的落库了」（存储层由 JSON 换为 SQLite 后对齐）。"""
+    conn = sqlite3.connect(str(data_dir / "hamster.db"))
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("SELECT * FROM records ORDER BY record_id").fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["modules"] = json.loads(d["modules"] or "[]")
+        d["edited_fields"] = json.loads(d["edited_fields"] or "[]")
+        out.append(d)
+    conn.close()
+    return out
 
 
 def _payload(date_str, minutes=58, correct=26, total=30, edited=None, user_id="demo_zhang"):
@@ -32,8 +48,8 @@ def test_post_records_ok_and_persisted(client, tmp_path):
     assert r.status_code == 200
     body = r.json()
     assert body["ok"] is True and body["record_id"].startswith("rec_")
-    saved = json.loads((tmp_path / "store.json").read_text(encoding="utf-8"))
-    assert saved["records"][0]["edited_fields"] == ["duration_minutes"]   # 必修项
+    saved = _saved_records(tmp_path)
+    assert saved[0]["edited_fields"] == ["duration_minutes"]   # 必修项
 
 
 def test_post_records_rejects_correct_over_total(client):
@@ -97,8 +113,8 @@ def test_post_records_dedupes_same_screenshot_resubmit(client, tmp_path):
     p2 = {**p, "confirmed_at": "2026-10-31T12:21:10.000Z"}      # 同一张图，39 秒后重复提交
     second = client.post("/api/records", json=p2).json()
     assert second["record_id"] == first["record_id"]
-    saved = json.loads((tmp_path / "store.json").read_text(encoding="utf-8"))
-    assert len(saved["records"]) == 1
+    saved = _saved_records(tmp_path)
+    assert len(saved) == 1
 
 
 def test_post_records_keeps_same_content_when_far_apart(client):

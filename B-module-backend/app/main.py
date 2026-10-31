@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import service
+from . import db, service
 from .schemas import RecordIn
 from .store import Store
 
@@ -51,6 +51,21 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
     @app.get("/api/memories")
     def get_memories():
         return {"items": store.memories}
+
+    # ---- 数据库能力（SQL 聚合，不是内存遍历） ----
+    @app.get("/api/health")
+    def health():
+        with store.db.lock:
+            info = db.db_overview(store.db.conn)
+        return {"ok": True, **info, "today": get_today().isoformat()}
+
+    @app.get("/api/stats")
+    def stats():
+        with store.db.lock:
+            return {
+                "modules": db.module_stats(store.db.conn),
+                "trend": db.daily_trend(store.db.conn, 7),
+            }
 
     return app
 
