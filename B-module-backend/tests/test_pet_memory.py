@@ -193,26 +193,27 @@ def test_闸_没有他说过的话时不许说你说过():
 def test_闸_引图必须引得出():
     """「我拱你一下，你那天学到凌晨两点，小灯还亮着呢」——图里没有小灯，是它想的。"""
     facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES,
-                          text="今天怎么样",
+                          text="我传了张截图",
                           uploads=[{"seen": {"minutes": 23,
                                              "modules": [{"name": "判断推理", "questions": 15, "correct": 9}]}}])
     ok, why = P.check_reply("我拱你一下，你刚传给我的那张图里，小灯还亮着呢。",
-                            facts=facts, user_text="今天怎么样", known_modules=KNOWN)
+                            facts=facts, user_text="我传了张截图", known_modules=KNOWN)
     assert not ok and "图里没有" in why
 
 
 def test_闸_引图说得出数就放行():
     facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES,
-                          text="今天怎么样",
+                          text="我传了张截图",
                           uploads=[{"seen": {"minutes": 23,
                                              "modules": [{"name": "判断推理", "questions": 15, "correct": 9}]}}])
     ok, _ = P.check_reply("你传的那张图上是判断推理，15 题。", facts=facts,
-                          user_text="今天怎么样", known_modules=KNOWN)
+                          user_text="我传了张截图", known_modules=KNOWN)
     assert ok
 
 
 def test_闸_没给过图却提图():
-    ok, why = P.check_reply("你那张图里写着呀。", facts=_facts(), user_text="今天怎么样",
+    # 问的不是账（问账时另有更狠的一条闸：别拿截图当答案）
+    ok, why = P.check_reply("你那张图里写着呀。", facts=_facts("你在干嘛呀"), user_text="你在干嘛呀",
                             known_modules=KNOWN)
     assert not ok and "没给过" in why
 

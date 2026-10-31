@@ -188,6 +188,14 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             "ms": 0,
         }
 
+        # 历史要在落库**之前**取。反过来的话，他这一句会同时出现在历史和最后的
+        # 「他说：……」里，模型一次看到两遍同一个问题——实测这会把它推向复读。
+        history = body.history or store.chat_history(user_id=body.user_id, limit=8)
+        # 出口的复读闸要拿它说过的话比。分两堆：答别的问题时说的（一律不许再出现）、
+        # 答同一个问题时说的（只挡逐字照抄）。换了个问题却回同一句，
+        # 才是用户截图里骂的那个毛病。
+        avoid, avoid_same = persona.split_recent_replies(history, text)
+
         # 他说的话先落库，再抽一条记忆。顺序不能反：先落库，崩了也不丢他的话。
         if text:
             store.add_chat(user_id=body.user_id, role="user", content=text)
@@ -195,8 +203,6 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             if item:
                 out["remembered"] = petmem.view(item)
 
-        # 历史优先用库里的：页面刷新不该让它忘掉刚才聊了什么
-        history = body.history or store.chat_history(user_id=body.user_id, limit=10)
         facts = persona.build_facts(
             today=today, modules=modules, memories=store.memories, text=text,
             uploads=store.uploads(user_id=body.user_id),
@@ -219,7 +225,8 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             if facts.get("mode") != "advice":
                 reply = persona.strip_commit(reply)
             passed, reason = persona.check_reply(reply, facts=facts, user_text=text,
-                                                 known_modules=known_modules)
+                                                 known_modules=known_modules,
+                                                 avoid=avoid, avoid_same=avoid_same)
 
             if not passed:
                 # 第一次被拦，把「哪句不行」喂回去让它自己改——只重试一次，
@@ -230,7 +237,8 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
                 if facts.get("mode") != "advice":
                     reply2 = persona.strip_commit(reply2)
                 passed2, reason2 = persona.check_reply(reply2, facts=facts, user_text=text,
-                                                       known_modules=known_modules)
+                                                       known_modules=known_modules,
+                                                 avoid=avoid, avoid_same=avoid_same)
                 if passed2:
                     reply, passed, reason = reply2, True, ""
                 else:
@@ -250,7 +258,10 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             # 说了不该说的：整句丢掉，换一句笨但真的。日志留证据，便于回看。
             print(f"[pet_say] 拦下模型回答：{reason} | 原文：{reply[:80]}")
             out["guard"] = {"ok": False, "reason": reason}
-            out["text"] = persona.fallback(text, facts=facts)
+            # 同一件事问了两遍、两次都吐出同一句：这时候兜底要认一句「刚说过啦」，
+            # 否则界面上还是两条一模一样的泡泡——正是用户截图里骂的那个样子。
+            out["text"] = persona.fallback(text, facts=facts,
+                                           repeat="原样说了一遍" in reason)
 
         store.add_chat(user_id=body.user_id, role="assistant", content=out["text"],
                        source=out["source"])

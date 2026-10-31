@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import difflib
 import re
 
 from . import pet_brain as brain
@@ -126,7 +127,57 @@ _BANNED_COMPARE = ("比昨天", "比前一天", "比上次", "比之前", "比�
 # 模型一回改成「十三分钟」「六成」，正则 \d+ 一个都抓不到，假话就顺出去了。
 # 只拦「分钟/小时/成」和三位数以上的「题」，因为「一道题」「两套」是正常口语，拦了会误杀。
 _CN_AMOUNT = re.compile(r"[一二两三四五六七八九十百千零]{1,3}(?:分钟|小时|成)")
-_CN_COUNT = re.compile(r"[三四五六七八九十]{1,3}(?:道题|道|题)")
+_CN_COUNT = re.compile(r"[一二两三四五六七八九十百]{1,4}(?:道题|道|题)")
+
+_CN_DIGIT = {"零": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
+             "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+_CN_UNIT = {"十": 10, "百": 100, "千": 1000}
+
+
+def _cn_to_int(s: str) -> int | None:
+    """「十三」「二十三」「两」→ 13 / 23 / 2。只覆盖口语里会出现的读法。"""
+    total, section, number = 0, 0, 0
+    hit = False
+    for ch in s:
+        if ch in _CN_DIGIT:
+            number = _CN_DIGIT[ch]
+            hit = True
+        elif ch in _CN_UNIT:
+            unit = _CN_UNIT[ch]
+            section += (number or 1) * unit
+            number = 0
+            hit = True
+        else:
+            return None
+    return total + section + number if hit else None
+
+
+def cn_amounts(text: str) -> list[tuple[str, int]]:
+    """把中文写法的数量换算成数：(原话, 等价值)。
+
+    为什么要换算出值再判：以前一律拦，于是「六成」这种**真话**也被打回，
+    重试一次还是中文，两次过不去就掉兜底——他听到的是一句更笨的话。
+    现在只有「换算完也不是事实里那个数」才算编（十三分钟 ≠ 130 分钟）。
+    """
+    out: list[tuple[str, int]] = []
+    for m in _CN_AMOUNT.finditer(text or ""):
+        raw = m.group(0)
+        if raw.endswith("成"):          # 「六成」：单位只有一个字
+            num, mul = raw[:-1], 10
+        elif raw.endswith("小时"):
+            num, mul = raw[:-2], 60
+        else:                            # 「分钟」
+            num, mul = raw[:-2], 1
+        n = _cn_to_int(num)
+        if n is not None:
+            out.append((raw, n * mul))
+    for m in _CN_COUNT.finditer(text or ""):
+        raw = m.group(0)
+        n = _cn_to_int(re.sub(r"(道题|道|题)$", "", raw))
+        # 「一道题」「两套」是口语，不是数量——只说得出三个以上才可能是编的
+        if n is not None and n > 2:
+            out.append((raw, n))
+    return out
 
 # 记忆归属错位：记得的人该是它。「你记得那句『我一定拿下』」——把它的记性安到了他头上。
 # 只拦这几个固定说法，不拦「你记得吃饭」这类正常的叮嘱。
@@ -405,6 +456,22 @@ def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text:
                          for m in recalled[:1]],
         }
 
+    # ③ 他在问账：今天多少分钟、哪块最毛。
+    # 这一支是「答非所问」的根治：以前「今天怎么样」落在 normal 模式，
+    # 事实包里有今天的数、也有刚传的图、还有旧事，模型没有主次，
+    # 就挑最具体的一样念——于是问今天学得怎么样，它答「数量关系那道题你算对了」。
+    # 现在直接把「第一句该说什么」算好摆在 answer 里，并且不给 memories、不给 sources：
+    # 问账的时候翻旧账和翻截图，都是跑题。
+    account = _asks_account(text)
+    if account and not _asks_how_know(text):
+        facts = {
+            "mode": "data",
+            "pet_state": pet_state,
+            "answer": _answer_view(account, today=today, modules=modules, text=text),
+        }
+        facts.update(_numbers(today, modules))
+        return facts
+
     facts = {
         "mode": "provenance" if _asks_how_know(text) else "normal",
         "pet_state": pet_state,
@@ -433,6 +500,131 @@ def _user_numbers(text: str) -> set[int]:
     return {int(n) for n in re.findall(r"\d+", text or "")}
 
 
+# ---------- 复读：这只宠物最丢人的一种毛病 ----------
+# 实测（2026-10-31 16:05-16:06 的真实会话）：连着点三次「今天怎么样」，
+# 三次回的是同一句「数量关系那道题你算对了，我看见的。」；再问「我哪里最毛」，
+# 回的还是一模一样的一句。不是它故意敷衍——把它自己的上一句当历史喂回去之后，
+# qwen-flash 会整句照抄，而抄出来的这句又落库、又进下一轮的历史，
+# 于是从第二轮开始就成了一个自己抄自己的死循环，越问越不会说话。
+#
+# 治这个病要两头一起：
+#   ① 输入侧不再喂它的原句（build_messages 只给他说过的话）；
+#   ② 输出侧留一道闸，万一还是抄了，就打回去重说（下面是这道闸）。
+_REPEAT_RATIO = 0.84      # 字符级重合到这个程度就算同一句
+_REPEAT_MIN_LEN = 8       # 太短的句子（「我在呢」）不判，误杀率高
+
+
+def _bare(s: str) -> str:
+    """去掉标点空白再比。不然「我看见了。」和「我看见了」会被当成两句。"""
+    return re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", s or "")
+
+
+def repeated(text: str, said_recently: list[str] | None = None,
+             ratio: float | None = None, prefix: bool = True) -> str | None:
+    """这句是不是它刚说过的那句。是就返回旧句，不是返回 None。
+
+    三种形态都算复读：一模一样、前面大半截照抄后面又补一句（最典型）、
+    或者只换了几个字。``ratio`` 可调松紧——同一个问题重问时只挡逐字照抄；
+    ``prefix=False`` 连「前半截照抄 + 补一句」都不算——同一件事问两遍，
+    数还是那对数，句子开头难免像，那种像不该打回。
+    """
+    a = _bare(text)
+    if len(a) < _REPEAT_MIN_LEN:
+        return None
+    for old in (said_recently or []):
+        b = _bare(old)
+        if len(b) < _REPEAT_MIN_LEN:
+            continue
+        if a == b:
+            return old
+        if prefix:
+            short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+            if len(short) >= 10 and long_.startswith(short):
+                return old
+        if difflib.SequenceMatcher(None, a, b).ratio() >= (ratio or _REPEAT_RATIO):
+            return old
+    return None
+
+
+def split_recent_replies(history: list[dict] | None, text: str) -> tuple[list[str], list[str]]:
+    """把它说过的话分成两堆：(答别的问题时说的, 答同一个问题时说的)。
+
+    两堆用不同的松紧：
+    - 答别的问题时说的，一律不许再出现——那是答非所问，用户截图里骂的就是这个；
+    - 答同一个问题时说的，只挡逐字照抄（同一件事问两遍，事实就那些，
+      答得一样是正常的；但两口气字都一模一样，界面上看着就像卡住了）。
+    """
+    other: list[str] = []
+    same: list[str] = []
+    asked = ""
+    for turn in (history or []):
+        role = turn.get("role")
+        content = (turn.get("content") or "").strip()
+        if role == "user":
+            asked = content
+        elif role == "assistant" and content:
+            (same if _bare(asked) == _bare(text) else other).append(content)
+    return other[-3:], same[-2:]
+
+
+# ---------- 他在问账：今天多少、哪块最毛 ----------
+# 这类问题以前落在 normal 模式：事实包里什么都有，但没有一句「他问的是这个」，
+# 于是模型挑最具体的东西念——「今天怎么样」被答成图里那道题。
+# 问账要的是主句，先给数，别的都不许抢。
+_ASK_DATA = ("怎么样", "多少", "几道", "几题", "正确率", "成绩", "进度", "错了几", "对了几",
+             "统计", "排名", "最毛", "最弱", "哪块", "哪里差", "短板", "哪个模块",
+             "学得如何", "做得如何", "学了多少", "做了多少")
+_WEAK_WORDS = ("最毛", "最弱", "哪块", "哪里差", "短板", "哪个模块", "不行的是")
+
+
+def _asks_account(text: str) -> str:
+    """他在问哪本账。返回 ``weakest`` / ``module`` / ``today`` / ``""``（不问账）。"""
+    t = text or ""
+    if not any(w in t for w in _ASK_DATA):
+        return ""
+    if any(w in t for w in _WEAK_WORDS):
+        return "weakest"
+    for name in _MODULE_VOCAB:
+        if name in t:
+            return "module"
+    return "today"
+
+
+def _answer_view(kind: str, *, today: dict, modules: list[dict], text: str) -> dict:
+    """给他问的那本账，直接算好一个「第一句该说什么」。
+
+    刻意只放一条主线：模型拿到一坨明细就会开始念账本（「资料分析 955 题、今天 130 分钟、
+    本周还差 1 天」），40 个字塞不下，最后一句实话都说不出。
+    """
+    detail = (today or {}).get("detail") or {}
+    pool = [
+        {"name": m["module"], "accuracy_pct": brain._pct(m.get("accuracy")),
+         "questions": m.get("questions")}
+        for m in (modules or [])
+        if (m.get("questions") or 0) >= brain.MIN_SAMPLE and m.get("accuracy") is not None
+    ]
+    if kind == "weakest":
+        if not pool:
+            return {"kind": "no_data"}
+        worst = min(pool, key=lambda m: m["accuracy_pct"])
+        return {"kind": "weakest", "module": worst["name"],
+                "accuracy_pct": worst["accuracy_pct"], "questions": worst["questions"]}
+    if kind == "module":
+        name = next((n for n in _MODULE_VOCAB if n in (text or "")), "")
+        hit = next((m for m in pool if m["name"] == name), None)
+        if not hit:
+            return {"kind": "no_data"}
+        return {"kind": "module", "module": hit["name"],
+                "accuracy_pct": hit["accuracy_pct"], "questions": hit["questions"]}
+    if not (today or {}).get("has_record"):
+        return {"kind": "empty"}
+    out = {"kind": "today", "minutes": int(detail.get("duration_minutes") or 0)}
+    acc = brain._pct(detail.get("accuracy"))
+    if acc is not None:
+        out["accuracy_pct"] = acc
+    return out
+
+
 def strip_commit(text: str) -> str:
     """把「再学 15 分钟」这类没有依据的承诺整句删掉。只在非判断模式下用。
 
@@ -454,8 +646,15 @@ def strip_commit(text: str) -> str:
 
 
 def check_reply(text: str, *, facts: dict, user_text: str = "",
-                known_modules: list[str] | None = None) -> tuple[bool, str]:
-    """上屏前的最后一道。返回 (能说?, 不能说的原因)。原因只进日志，不给用户看。"""
+                known_modules: list[str] | None = None,
+                avoid: list[str] | None = None,
+                avoid_same: list[str] | None = None) -> tuple[bool, str]:
+    """上屏前的最后一道。返回 (能说?, 不能说的原因)。原因只进日志，不给用户看。
+
+    ``avoid`` / ``avoid_same`` 是它最近说过的几句，分两堆：答别的问题时说的、
+    答同一个问题时说的。抄自己上一句时，那句话是真的、也不犯忌，
+    但重复一遍等于一个字都没答——所以单独立一道闸，和「说假话」分开算。
+    """
     if not text or not text.strip():
         return False, "空回答"
 
@@ -476,6 +675,16 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
         invented = [n for n in _MODULE_VOCAB if n in text and n not in known]
         if invented:
             return False, f"说了库里没有的科目 {invented}"
+
+    # 抄自己上一句。这句不假，但等于没答——所以单独拦，让它重说。
+    # 两种情形要分开说：换了问题还回同一句（答非所问）和同一件事重复问
+    # 又逐字照抄。后者不能照前者的改法改——它得留着那笔账，只换说法。
+    dup = repeated(text, avoid)
+    if dup:
+        return False, f"复读了刚才那句「{dup[:24]}」，一个字都没答他"
+    dup = repeated(text, avoid_same, ratio=0.95, prefix=False)
+    if dup:
+        return False, f"又把刚才那句原样说了一遍「{dup[:24]}」"
 
     # 他在问该不该学，回答里必须有一个结论。
     # 没有这道闸，「所以我今天就不用学习了吗」会被答成「我帮你剥了颗瓜子」——
@@ -507,6 +716,9 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
     if any(w in text for w in _CITES_IMAGE):
         if facts.get("mode") == "comfort":
             return False, "他正难受，不该翻截图当证据"
+        if facts.get("mode") == "data":
+            # 问账的时候把答案换成「图里如何如何」，就是把今天的账答成了那张图
+            return False, "他在问账，别拿截图当答案"
         up = facts.get("last_upload") or {}
         if not up:
             return False, "他没给过你图，你却提了图"
@@ -523,19 +735,23 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
                 or any(m in text for m in _CITE_MARKERS)):
             return False, "提到了图，但说的内容图里没有"
 
+    # 他在问今天的账，却把账安到他嘴上：「82 分钟，你自己跟我说的」——
+    # 那数是从记录里算的，他没说过。这类出处错位比报错数更伤信任，
+    # 因为他会想「我什么时候说过」。
+    if facts.get("mode") == "data" and re.search(r"你自己跟我?说的|你亲口说的|你确认过", text):
+        return False, "把记录里的账说成是他跟你说的"
+
     # 把旁白当成他的原话：只有真的存在「他说的」记忆时，才允许说「你说过」
     if re.search(r"你说过|你上次说|你跟我?说", text):
         said_by_him = [m for m in (facts.get("memories") or []) if m.get("who") == "他"]
         if not said_by_him:
             return False, "把系统旁白当成了他的原话"
 
-    # 他难过的时候报数字，是这只仓鼠最不该做的事——实测模型一定会犯，所以硬拦
-    if looks_sad(user_text) and re.search(r"\d", text):
+    # 他难过的时候报数字，是这只仓鼠最不该做的事——实测模型一定会犯，所以硬拦。
+    # 但「累死了，我今天做得怎么样」是他自己开口问的账，那时候给数才是答他，
+    # 不给数等于装没听见。所以 data 模式放行，和 build_facts 那边给数保持一致。
+    if looks_sad(user_text) and re.search(r"\d", text) and facts.get("mode") != "data":
         return False, "他正难受，这时候不该报任何数字"
-
-    cn = _CN_AMOUNT.findall(text) or _CN_COUNT.findall(text)
-    if cn:
-        return False, f"把库里的数字改成了中文写法 {cn}，查不了真伪"
 
     made_up = [p for p in _BANNED_COMPARE if p in text]
     if made_up:
@@ -552,6 +768,14 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
     # 出处摘要里也带数（「判断推理 15 题对 9 题」），那些同样是他给过我的
     for src in (facts.get("sources") or []):
         allowed |= {int(n) for n in re.findall(r"\d+", str(src.get("what") or ""))}
+
+    # 中文写法的数量：换算成数再判。库里真有这个数就放行（「六成」= 60%，
+    # 事实里就是 60），换算完对不上才拦（「十三分钟」对不上 130 分钟）。
+    cn_bad = [(raw, n) for raw, n in cn_amounts(text) if n not in allowed]
+    if cn_bad:
+        raw = [r for r, _ in cn_bad]
+        return False, f"把数字改成了中文写法 {raw}，对不上库里的任何一条"
+
     stray = [int(n) for n in re.findall(r"\d+", text) if int(n) not in allowed]
     if stray:
         return False, f"出现事实里没有的数字 {stray}"
@@ -566,18 +790,42 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
 def build_messages(user_text: str, *, facts: dict, history: list[dict] | None = None) -> list[dict]:
     """拼请求。system 必须第一条——这是 OpenAI 协议的硬要求，也是人设的地基。
 
-    历史只带最近 4 条（两轮）。带得越多它越爱模仿自己上一句的腔调——
-    实测 6 条时它连着三轮说出同一个句式，像卡住的唱片。
+    历史**只喂他说过的话，不喂它自己的原句**。这条是踩出来的：
+    以前把上一轮它的回答一起放回去，qwen-flash 会整句照抄（连着三轮同一个句子），
+    而抄出来的那句又落库、又进下一轮的历史，于是越问越像唱片跳针。
+    它需要知道的是「他刚才说过什么」，不是「我上句说了什么」——
+    后者由 ``check_reply`` 的复读闸在出口挡，没必要让它自己看见。
     """
     msgs: list[dict] = [{"role": "system", "content": PERSONA}]
-    for turn in (history or [])[-4:]:
-        role = turn.get("role")
+    said = [t for t in (history or []) if t.get("role") == "user"]
+    for turn in said[-4:]:
         content = (turn.get("content") or "").strip()
-        if role in ("user", "assistant") and content:
-            msgs.append({"role": role, "content": content[:200]})
+        if content:
+            msgs.append({"role": "user", "content": f"（他更早说过：{content[:200]}）"})
     facts_json = __import__("json").dumps(facts, ensure_ascii=False, separators=(",", ":"))
     hint = ""
-    if facts.get("mode") == "advice":
+    if facts.get("mode") == "data":
+        ans = facts.get("answer") or {}
+        kind = ans.get("kind")
+        if kind == "weakest":
+            hint = ("\n他在问哪一块最弱。第一句就直接说模块名和正确率（照 answer.module 和"
+                    "answer.accuracy_pct 说，比如「数量关系最毛，52%」），第二句说题量或者做个小动作。"
+                    "不要提截图，不要提他说过的话，不要报今天的分钟数。20 到 35 字。")
+        elif kind == "module":
+            hint = ("\n他在问这一科的成绩。先说这一科的正确率（answer.accuracy_pct），"
+                    "再说多少题（answer.questions）。只报这两个数，别扯别的科目。20 到 35 字。")
+        elif kind == "empty":
+            hint = ("\n他今天还没有记录。就说今天还没看到他的记录，别提任何数字，"
+                    "也别编一个时长。20 字以内。")
+        else:
+            hint = ("\n他在问今天的账。第一句说今天多少分钟（answer.minutes），"
+                    "有 answer.accuracy_pct 就跟着说一个；只报这两个数，"
+                    "不要念周目标，不要提模块，不要提截图。20 到 35 字。"
+                    "正确率写成「60%」，不许写成「六成」。"
+                    "这一轮不许出现「图」「截图」「照片」这三个字——他问的是今天，不是那张图。"
+                    "也不许把账安到他嘴上：不能说「你自己跟我说的」「你确认过」——"
+                    "这些数是他做题时记下的，不是他告诉你的。")
+    elif facts.get("mode") == "advice":
         # 实测不提这一句，它会挑最安全的那句：「你辛苦了，早点休息吧」——
         # 听着贴心，但他问的是「还用学吗」，这句话等于没回答。
         hint = ("\n他在问你今晚该不该继续学。facts.verdict 是已经算好的结论，照它说，不许改："
@@ -598,6 +846,17 @@ def build_messages(user_text: str, *, facts: dict, history: list[dict] | None = 
         hint = ("\n他现在难受。先认下这件事确实难，再给一个小动作（推瓜子、趴他手边、"
                 "拱他一下），20 到 40 个字。不要说「我听见了」这种空话，不要给办法，"
                 "也不要用「你刚说……」开头——那是在把他的话念回来。")
+    # 他刚问过同一件事。不提醒的话，它会照上一遍的句式再念一次——
+    # 数没错，但界面上看着像卡死（用户截图里骂的就是这个）。
+    # 只说「你答过了」不够：它的原话被 build_messages 滤掉了，它根本不知道自己
+    # 上次说了什么，只能又凑出同一句。所以把上一句当成**反面样本**贴给它，
+    # 明确「不许用这段里的开头」。贴出来是有风险的（它爱照抄），
+    # 但不说「别抄这句」风险更大——实测后者十次里七次逐字重来。
+    _, asked_before = split_recent_replies(history, user_text)
+    if asked_before:
+        hint += ("\n这是他刚问过的同一件事，你上一遍的原话是：「{}」。"
+                 "这次必须换个说法：不许用上面那段里的开头四个字，也不许把它整句搬过来。"
+                 "数一个字都不许变。".format(asked_before[-1][:40]))
     msgs.append({
         "role": "user",
         "content": f"事实（JSON，只能用这里面的数字，sources 是你唯一能指的出处）：{facts_json}"
@@ -617,7 +876,19 @@ def retry_messages(messages: list[dict], rejected: str, reason: str) -> list[dic
     因为它不知道该改哪个点；说「这一句里不许出现分钟数」，它一次就改对了。
     """
     specific = ""
-    if "时长" in (reason or ""):
+    if "原样说了一遍" in (reason or ""):
+        # 同一件事他问了两遍。这时候不能叫它「别重复」——账就那笔，数还得说。
+        # 要改的是句子的壳：开头不能跟上一遍沾边，但同一笔账得说全。
+        specific = ("他问的还是同一件事。数一个都不许改，但这句话不能跟上一遍雷同："
+                    "开头必须换掉，别再用上一遍那前几个字，也别整句照搬。")
+    elif "复读" in (reason or ""):
+        specific = ("那句是他刚才已经听过的话。换一句全新的，直接回答他这一次问的问题，"
+                    "不许接上一句，也不许换个说法把上一句重说一遍。")
+    elif "中文写法" in (reason or ""):
+        # 注意：「把 82 写成八成」也带「数字」两个字，但改法和漏数字完全相反——
+        # 让它「不许出现任何数字」，它就会把 82 改得更彻底地写成中文，越改越错。
+        specific = "数字照原样写阿拉伯数字：82 就说「82 分钟」，不许写成「八成」「六成」，也不许换算成小时。"
+    elif "时长" in (reason or ""):
         specific = "这一句里不许出现任何分钟数，也不许说再学多久——他没问你这个。"
     elif "数字" in (reason or ""):
         specific = "这一句里不许出现任何数字。"
@@ -644,7 +915,7 @@ def looks_sad(text: str) -> bool:
 
 
 # 他一边说难受一边问成绩，这时候还是要给数（他真的想知道），不能一律进安慰模式
-_ASK_DATA = ("怎么样", "多少", "几道", "几题", "正确率", "成绩", "进度", "错了几", "对了几", "统计", "排名")
+# （词表在上面 _ASK_DATA，别在这里再定义一份——两份词表必然漂移）
 
 
 def _asks_for_data(text: str) -> bool:
@@ -721,19 +992,30 @@ _FALLBACK_HOW = [
 ]
 
 
-def fallback(user_text: str, facts: dict | None = None) -> str:
+def fallback(user_text: str, facts: dict | None = None, repeat: bool = False) -> str:
     """模型不在（没网、超时、说了不该说的）时，它还是会说一句人话，只是笨一点。
 
     这些句子一个数字都不带 —— 笨可以，假不行。
 
-    唯一例外是「该不该学」：那种时候「我在呢」等于没答，所以要照算好的结论说。
-    哪怕模型挂了，他问「今天还用学吗」也得有个明确答复。
+    两个例外，都是「不答等于没答」的时候：
+
+    - 「该不该学」：照算好的结论说，哪怕模型挂了也得给个明确答复。
+    - 「今天怎么样 / 哪块最毛」：这类问账的话，回一句「我在呢」等于装没听见。
+      直接照 facts.answer 的数字说，话笨但每个数都是真的。
+
+    ``repeat=True`` 是他又问了一遍同一件事、而已有的回答跟上一次一个字都不差：
+    在前头认一句「刚说过啦」，再把同一笔账报一遍。数不变，界面上一眼能看出
+    它在应他这句，不是卡住了。
     """
-    verdict = ((facts or {}).get("verdict") or {}).get("verdict")
+    facts = facts or {}
+    verdict = (facts.get("verdict") or {}).get("verdict")
     if verdict:
         return coach.fallback(verdict=verdict,
-                              again_minutes=((facts or {}).get("verdict") or {}).get("again_minutes"),
+                              again_minutes=(facts.get("verdict") or {}).get("again_minutes"),
                               seed=user_text)
+    plain = _plain_answer(facts, repeat=repeat)
+    if plain:
+        return plain
     if _asks_how_know(user_text):
         pool = _FALLBACK_HOW
     elif any(w in (user_text or "") for w in _MEMORY_WORDS):
@@ -744,3 +1026,26 @@ def fallback(user_text: str, facts: dict | None = None) -> str:
         pool = _FALLBACK_NORMAL
     # 不随机：同一句话按输入长度轮换，测试可复现
     return pool[len(user_text or "") % len(pool)]
+
+
+def _plain_answer(facts: dict, repeat: bool = False) -> str:
+    """问账时的兜底：不加形容词，照着 answer 报一句。数都是算好的，不会假。"""
+    ans = facts.get("answer") or {}
+    kind = ans.get("kind")
+    head = "刚说过啦，" if repeat else ""
+    tail = "。" if repeat else "。我记着呢。"
+    if kind == "today" and ans.get("minutes") is not None:
+        text = f"今天 {ans['minutes']} 分钟"
+        if ans.get("accuracy_pct") is not None:
+            text += f"，正确率 {ans['accuracy_pct']}%"
+        return head + text + tail
+    if kind in ("weakest", "module") and ans.get("module"):
+        text = f"{ans['module']}最毛，{ans.get('accuracy_pct')}%"
+        if ans.get("questions"):
+            text += f"，{ans['questions']} 题"
+        return head + text + tail
+    if kind == "empty":
+        return "今天还没看到你的记录，我不瞎猜。"
+    if kind == "no_data":
+        return "题量还太少，我先不下结论。"
+    return ""

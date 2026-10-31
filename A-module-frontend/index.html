@@ -1328,7 +1328,9 @@ function petSay(text, intent){
       PET_HISTORY = PET_HISTORY.slice(-8);
       var meta = d.source === 'model'
         ? ((d.persona || '团团') + ' · ' + d.model)
-        : '模型没接上，它凭记忆说';
+        : (d.guard && !d.guard.ok
+            ? '刚才那句绕回去了，这句是照账说的'   /* 模型答了，被闸拦下，换了句笨但真的话 */
+            : '模型没接上，它凭记忆说');
       /* 这一轮它在拿主意。标出来，他才知道「今天够了」不是随口说的，
          是照着上面那行账算的 */
       if(d.facts && d.facts.mode === 'advice'){
