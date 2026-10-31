@@ -1,7 +1,64 @@
 # A 模块 · 前端与视觉
 
-> 负责人：A（曹苏睿）｜ 2026-10-31 更新 ｜ 宠物形象：**仓鼠**（任务卡的「小芽」已作废）
+> 负责人：A（曹苏睿）｜ 2026-10-31 18:10 更新 ｜ 宠物形象：**仓鼠**（任务卡的「小芽」已作废）
 > 一句话：**让 B / C / D 不用找 A 要文件，全链路就能跑通**
+
+---
+
+## 零、前端入口只有一个：`index.html`
+
+**看前端、录屏、给评委看，只用这一个文件**：
+
+```
+A-module-frontend/index.html        ← 418 KB，自包含，双击即开，不需要 npm / 不需要后端
+```
+
+它就是 `原型/仓鼠陪跑_原型_接真数据_单文件版.html` 的同步副本（`sync_frontend.py` 生成，
+别直接改 index.html；改原型后跑一次 `python A-module-frontend/sync_frontend.py`）。
+
+**为什么是它而不是 Vue 工程**：五屏、仓鼠五态、缺口行、记忆墙、底部 dock 全在这个文件里，
+样式和动效都已定稿；`app/dev.html`（Vue）只是 13:30 为了对接 B 的接口、C 的 recognize.js 搭的**联调壳**，
+UI 是极简版，**不是演示门面**。
+
+### 17:55 之后：`npm run dev` 打开的就是这一屏
+
+之前 `npm run dev` 打开的是极简联调壳，跟原型完全不是一个东西——这是"前端怎么长得不一样"的全部原因。
+现在工程里做了入口重排，两条路都留着：
+
+```
+app/
+├── index.html            ← npm run dev 的首页：跳转 → ./prototype.html（= 原型，418KB）
+├── dev.html              ← Vue 联调壳（原来的 index.html，接 B 的 /api/today、C 的 recognize.js）
+└── public/prototype.html ← 原型的副本，由 sync_frontend.py 生成，别手改
+```
+
+- **要看视觉 / 录屏 / 给评委看** → `npm run dev`，打开 `http://localhost:5173/` 就是原型那一屏
+- **要联调真后端** → 同一个服务，打开 `http://localhost:5173/dev.html`（右下角有「← 回到演示版」）
+- 端口固定在 **5173**（`strictPort`），因为 B 的 CORS 只放行 5173，别改
+- GitHub 上直接点 html 只能看源码；要变成能点开的链接，见下方「部署成链接」
+
+### 信息架构（打开后看到的顺序）
+
+| # | 屏 | 内容 | 数据来源 |
+|---|---|---|---|
+| 1 | 今日 `data-page="home"` | 陪你的第 47 天 / 距笔试 46 天 → 仓鼠五态 + 状态词（踏实）+ 一句话 → **本周欠 2 次**（缺口卡，可展开到模块级）→ 传今天的截图 / 今天没学 | 内置演示数据 + 真识别回填 |
+| 2 | 记忆 `data-page="memory"` | 41 天前那句承诺 → 本周正确率 48% → 活力曲线（近 45 天，断签 2 次）→ 三条它注意到的事 | 内置演示数据 |
+| 3 | 档案 `data-page="archive"` | 开始日 / 有效天数 39 / 缺勤 8 / 最长连续 27 / 深夜 63 / 各模块 52%→71% | 内置演示数据 |
+| 4 | 出分日 `data-page="result"` | 想过放弃 3 次 / 还是坐下来 3 次 | 内置演示数据 |
+| 5 | 确认卡 / 兜底 | 上传真实截图 → 识别等待 → 确认卡（可改字段）→ 非学习图走兜底手填 | **C 的 r5 真识别**（内联） |
+
+- 底部 dock 七格：演示路径 / 今日 / 传截图 / 回忆 / 出分日 / 实拍 / 切屏（后两个是演示辅助，路演时可只用前五个）
+- 仓鼠五态：`yuanqi 元气` / `tashi 踏实` / `pibei 疲惫` / `nianle 蔫了` / `xiumian 休眠`，
+  五张 512 透明底 WebP 已 base64 内联在文件里，**离线也不会缺图**
+- 识别：C 的 `recognize.js v1.1-r5` 全文内联，上传真截图走真识别；识别服务连不上时降级到演示样本，不白屏
+
+### 三种打开方式
+
+| 你要干什么 | 怎么做 |
+|---|---|
+| 看视觉 / 录屏 / 路演 | 双击 `A-module-frontend/index.html`（或浏览器拖进去）；或 `cd app && npm run dev` → `http://localhost:5173/`，**两者是同一屏** |
+| 部署成链接 | 把这个文件放到任意静态托管（GitHub Pages 的 branch 根目录即可，根 `index.html` 已做跳转）；`npm run build` 产物里 `dist/index.html` 也是同一个跳转 |
+| 跑真后端联调 | `npm run dev` 后开 `http://localhost:5173/dev.html`（Vue 壳，接 B 的 `/api/today`）；`index.html` / `prototype.html` 不连后端，它们是演示门面 |
 
 ---
 
@@ -9,10 +66,16 @@
 
 ```
 A-module-frontend/
-├── app/                 Vue 工程（npm install && npm run dev）
-│   ├── src/             App.vue、api.js、五屏组件、话术、仓鼠五态图
+├── index.html           ★ 前端入口（418KB 自包含原型，双击即开）
+├── sync_frontend.py     ★ 原型 → index.html + app/public/prototype.html 同步脚本
+├── app/                 Vue 工程：npm run dev 打开的是原型，dev.html 才是联调壳
+│   ├── index.html       ★ 只做跳转 → ./prototype.html（演示门面）
+│   ├── dev.html         ★ Vue 联调壳（接 B 的 /api/today、C 的 recognize.js）
+│   ├── vite.config.js   端口锁 5173 + 双入口（index.html / dev.html）
+│   ├── src/             App.vue、api.js、组件、话术、仓鼠五态图
 │   └── public/
-│       └── recognize.js C 的识别脚本（v1.1-r5）
+│       ├── prototype.html  原型的副本（sync_frontend.py 生成）
+│       └── recognize.js    C 的识别脚本（v1.1-r5）
 │
 ├── hamster-kit/         ★ 仓鼠五态素材，全队统一形象入口
 │   ├── hamster.css      五态切图 + 微动效 + 预加载
@@ -28,9 +91,8 @@ A-module-frontend/
 │   ├── engine.js        状态引擎（从原型原样移植）
 │   └── data/seed.json   45 天假数据
 │
-├── seed/                ★ 本次新增：给 D 的假数据
-│   ├── make_seed.py     生成脚本，改完重跑会同步到 mock-server
-│   └── seed.json        45 天，自洽校验通过
+├── seed/                ★ 本次新增：给 D 的假数据生成器
+│   └── make_seed.py     生成脚本，产物直接写到 mock-server/data/seed.json（唯一一份）
 │
 ├── contract/            ★ 本次新增：三接口契约
 │   ├── README.md        字段表 + 判定规则
@@ -118,7 +180,8 @@ r5 已全量接入（`app/public/recognize.js`），这里只是留档。识别�
 
 ### 👤 D（产品/路演）—— 拿 `seed/` + `原型/` + `test-images/`
 
-- `seed/seed.json` 已按故事线造好（D8 断签 / D15 凌晨崩溃 / D22 承诺 / 本周 48%），**直接用或改完重跑 `make_seed.py`**
+- 数据在 **`mock-server/data/seed.json`（唯一一份，45 天）**，已按故事线造好（D8 断签 / D15 凌晨崩溃 / D22 承诺 / 本周 48%）
+- 要改数字就改 `seed/make_seed.py` 再 `python seed/make_seed.py`，**直接覆盖那一份 json**；`SEED_TODAY=2026-10-31` 可钉住生成日期，不钉就用运行当天
 - `原型/仓鼠陪跑_原型_接真数据_单文件版.html` 双击即开，录屏素材从这儿出
 - `test-images/test5.jpg` 是唯一不带 `OLD_SCREENSHOT` 黄条的图，**路演主演示图用它**
 - ⚠️ **任务卡内部矛盾**：写的是「30 天假数据」，但记忆屏要引用「41 天前说的话」——30 天覆盖不到 41 天前，记忆屏会自相矛盾。**已拉到 45 天**，请确认口径

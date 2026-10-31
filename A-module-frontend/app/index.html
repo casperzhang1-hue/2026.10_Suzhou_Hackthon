@@ -1,14 +1,31 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>考公陪跑 · 仓鼠打卡</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <!-- C 模块识别 SDK（挂 window.recognizeScreenshot）；api.js USE_MOCK=false 时依赖它 -->
-    <script src="/recognize.js"></script>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>仓鼠陪跑 · 高保真原型</title>
+<!-- 前端入口 = 原型。真正的页面在 public/prototype.html（418KB 自包含，五屏 + 五态 + 缺口行 + 记忆墙）。
+     联调壳（Vue，接 B 的 /api/today、C 的 recognize.js）挪到 dev.html。 -->
+<meta http-equiv="refresh" content="0; url=./prototype.html">
+<style>
+  html, body { margin: 0; height: 100%; background: #120E0B; }
+  body {
+    display: grid; place-items: center; color: #F4E9DC;
+    font: 15px/1.8 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .tip { text-align: center; padding: 24px; }
+  .tip b { font-size: 17px; letter-spacing: .5px; }
+  .tip p { margin: 10px 0 0; color: #8B7868; font-size: 13px; }
+  .tip a { color: #B3756A; text-decoration: none; }
+  .tip a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="tip">
+  <b>正在打开仓鼠陪跑原型…</b>
+  <p>没有自动跳转就点这里：<a href="./prototype.html">prototype.html</a></p>
+  <p>要联调 Vue 壳（接 B 的接口）→ <a href="./dev.html">dev.html</a></p>
+</div>
+<script>location.replace('./prototype.html');</script>
+</body>
 </html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>考公陪跑 · 仓鼠打卡（联调壳 dev.html）</title>
+    <style>
+      #back-to-demo {
+        position: fixed; right: 16px; bottom: 16px; z-index: 9999;
+        padding: 6px 12px; border-radius: 999px; text-decoration: none;
+        font: 12px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: #F4E9DC; background: rgba(24, 18, 14, .82); border: 1px solid rgba(244, 233, 220, .18);
+      }
+      #back-to-demo:hover { background: rgba(179, 117, 106, .9); }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <!-- 联调壳：13:30 搭的 Vue 壳，接 B 的 /api/today 与 C 的 recognize.js，UI 极简。
+         演示门面是 index.html（→ /prototype.html），不是这一页。 -->
+    <!-- C 模块识别 SDK（挂 window.recognizeScreenshot）；api.js USE_MOCK=false 时依赖它 -->
+    <script src="/recognize.js"></script>
+    <script type="module" src="/src/main.js"></script>
+    <a id="back-to-demo" href="./index.html">← 回到演示版（原型）</a>
+  </body>
+</html>
