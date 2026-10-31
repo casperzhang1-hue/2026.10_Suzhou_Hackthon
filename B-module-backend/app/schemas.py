@@ -39,3 +39,14 @@ class VerifyIn(BaseModel):
     """POST /api/pet/verify：模型答完的复核请求体。"""
     intent: str = "today"
     text: str = ""
+
+
+class SayIn(BaseModel):
+    """POST /api/pet/say：他主动跟仓鼠说一句话。
+
+    ``text`` 上限 300 字，是防误粘贴一整篇题；下限 1 字，空话直接 422。
+    ``history`` 只带最近几轮，长会话不该无限涨 token——那是烧钱，不是记性。
+    """
+    text: str = Field(min_length=1, max_length=300)
+    history: list[dict] = []
+    user_id: str = "demo_zhang"

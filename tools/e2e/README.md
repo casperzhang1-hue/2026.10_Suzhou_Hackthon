@@ -28,6 +28,7 @@ python start_fullstack.py
 | `pet_longpress.mjs` | 真实鼠标事件：短按 120ms 不出面板、长按 900ms 出面板、点话题按钮得回答 | 短按只冒话术；长按出面板；点按钮后出现模型回答 |
 | `pet_offline.mjs` | 切 CDP 离线后点话题 | 落到兜底话术，**一个数字都没有**，0 异常 |
 | `pet_guard_fallback.mjs` | 注入 `verify → ok=false`，看前端是否丢弃模型回答并回退模板 | 最终显示 `来自 SQLite · …`，日志有 `[pet] 数字复核不通过` |
+| `pet_chat_input.mjs` | 长按唤起 → 点输入框 → 模拟中文输入法上屏 → 回车发送 → 再点一个话题 | 引擎状态显示「团团 在线 · qwen-flash」；两次都得到模型回答且 meta 带模型名；输入框发完清空；0 异常 |
 
 ```bash
 cd tools/e2e
@@ -35,6 +36,7 @@ node pet_model_chat.mjs
 node pet_longpress.mjs
 node pet_offline.mjs
 node pet_guard_fallback.mjs
+node pet_chat_input.mjs
 ```
 
 ## 为什么要留这几个脚本
