@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "recognition": { "recognized_at": "2026-10-30T23:35:00+08:00", "confidence": 0.12 },
+  "source_app": null,
+  "event_date": null,
+  "event_time": null,
+  "duration_minutes": null,
+  "modules": [],
+  "total_questions": null,
+  "accuracy": null,
+  "warnings": [
+    { "code": "NOT_A_STUDY_SCREENSHOT", "message": "这张看不出来是学习截图，换一张或手动选" }
+  ],
+  "encouragement": { "level": "normal", "message": "换一张试试？" }
+}

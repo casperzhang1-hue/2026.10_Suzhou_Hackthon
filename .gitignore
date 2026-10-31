@@ -1,0 +1,22 @@
+# ===== Node / 前端 =====
+node_modules/
+dist/
+.vite/
+*.log
+
+# ===== 环境与密钥（绝不提交）=====
+.env
+.env.*
+*.key
+credentials*
+config/local/
+
+# ===== 系统文件 =====
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# ===== 临时与备份 =====
+*.tmp
+*_backup/
+*~$
