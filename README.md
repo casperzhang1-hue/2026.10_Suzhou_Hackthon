@@ -10,14 +10,27 @@
 
 | 模块 | 职责 | 状态 | 入口 |
 |---|---|---|---|
-| A · 前端 | 上传 → 确认卡 → 今日屏 / 记忆屏 / 出分日屏，宠物五态 | ✅ 已入库（13:30 迁入，13:50 补 mock 服务 / seed / 接口契约） | [`A-module-frontend/`](A-module-frontend/) |
+| A · 前端 | 上传 → 确认卡 → 今日屏 / 记忆屏 / 出分日屏，宠物五态 | ✅ 已入库（Vue 工程 + 仓鼠五态素材 + 四版原型 + mock 服务 + 45 天 seed + 三接口契约） | [`A-module-frontend/`](A-module-frontend/) |
 | **C · AI 学习截图识别** | 识别截图中的学习数据（来源 App / 时长 / 题量 / 正确率 / 模块明细），输出标准 JSON + 鼓励等级 | ✅ **已完成 v1.1-r5，验收通过（10/10 跑批）** | **[`C-module-recognition/`](C-module-recognition/)** |
-| B · 后端与状态引擎 | `/api/records` 入库、`computeDailyState` + 6 测试、`/api/today`（**必须带 gap 缺口行**） | 🔴 进行中（全队唯一阻塞） | [`B-module-backend/`](B-module-backend/) |
+| B · 后端与状态引擎 | `POST /api/records` 入库、`GET /api/today` 今日状态（含缺口行）、`GET /api/memories`；状态引擎移植自 A 原型并对拍 | ✅ FastAPI + 29 个测试通过（14:07 合并入 main） | **[`B-module-backend/`](B-module-backend/)** |
 | D · 数据与素材 | seed.json（45 天）、路演逐字稿、pitch.pdf、fallback.mp4 | 🔴 进行中 | [`D-module-materials/`](D-module-materials/) |
 
 > 各模块负责人把自己的代码放进对应目录，**只动自己的目录**；跨模块的接口契约以
 > [`C-module-recognition/docs/接口草案_C模块_识别结果JSON_v1.1.md`](C-module-recognition/docs/接口草案_C模块_识别结果JSON_v1.1.md)
 > 为单一事实源。需求与验收以 [`docs/考公陪跑Agent_PRD_v1.1.md`](docs/考公陪跑Agent_PRD_v1.1.md) 为准。
+
+## 分支状态（14:30 全员合并完毕）
+
+四个个人分支已全部合入 `main`，**后续直接提交 main，不再开分支**：
+
+| 分支 | 负责人 | 独有内容 | 处理 |
+|---|---|---|---|
+| `Taoyu_Chen` | B · 陶宇 | FastAPI 后端 + 状态引擎 + 29 个 pytest + golden 对拍数据 | ✅ 已合并 |
+| `Surui_Cao` | A · 曹苏睿 | 仅分支 README 横幅（A 的代码早就在 main） | ✅ 已合并，横幅已删 |
+| `nina_chen` | C · Nina | 无（已在 main） | ✅ 已包含 |
+| `Yuchen_Zhang` | D · 张宇辰 | 无（已在 main） | ✅ 已包含 |
+
+存档点：`pre-merge-1425`（合并前）、`v0-baseline`、`v1.0.0`、`v1.0.1`
 
 ## C 模块 30 秒速览（演示核心路径）
 
@@ -28,31 +41,36 @@
 
 详细文档 → **[`C-module-recognition/README.md`](C-module-recognition/README.md)**
 
-## A 模块 30 秒速览（13:50 新增）
-
-B 接口未交、D 的 seed 逾期，光有素材链路是断的。所以补了三样**能让链路立刻跑起来**的东西：
+## A 模块 30 秒速览
 
 ```bash
 cd A-module-frontend/mock-server && node server.js    # 零依赖，8787 端口，三个接口全实现
 ```
 
-| 新增目录 | 解决什么 |
+| 目录 | 解决什么 |
 |---|---|
-| `A-module-frontend/mock-server/` | B 交付前，前端有后端可接，全链路能跑 |
-| `A-module-frontend/seed/` | D 逾期，A 先造 45 天兜底数据，D 来了直接替换 |
-| `A-module-frontend/contract/` | B 照字段表实现，不用猜 |
-
-**B 交付后，前端只改 `app/src/api.js` 里的 `API_BASE` 一个常量，业务代码一行不动。**
-
-⚠️ 给 B 的三条硬要求：
-
-1. **`mock-server/engine.js` 直接复用，别重写** —— 否则前端一套算法、后端一套算法，现场两套结果不一致
-2. **`/api/today` 必须带 `gap` 缺口行** —— RK-08 是全场最高风险（16 分）；`owed = 0` 时缺口行消失，防法失效
-3. **seed 已按 45 天造** —— 任务卡写的是 30 天，但记忆屏要引用「41 天前说的话」，30 天覆盖不到 41 天前，记忆屏会自相矛盾
+| `A-module-frontend/mock-server/` | B 交付前，前端有后端可接，全链路能跑（B 已交付，现作兜底） |
+| `A-module-frontend/seed/` | 45 天自洽演示数据，D 的 seed 可直接替换 |
+| `A-module-frontend/contract/` | 三接口字段表，B 照此实现 |
+| `A-module-frontend/hamster-kit/` | ★ 仓鼠五态素材（CSS + JS + 透明 WebP），全队统一形象入口 |
 
 路演主演示图 → `A-module-frontend/test-images/test5.jpg`（10 张里唯一不带 `OLD_SCREENSHOT` 黄条的）
 
 详细文档 → **[`A-module-frontend/README.md`](A-module-frontend/README.md)**
+
+## B 模块 30 秒速览
+
+```bash
+cd B-module-backend
+python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pytest -q                          # 29 个测试
+.venv/bin/python -m uvicorn app.main:app --port 8000   # 起服务
+```
+
+- 环境变量 `HAMSTER_TODAY` 可钉死"今天"，路演回放不随日期漂移
+- 状态引擎移植自 A 原型并做了 golden 对拍（`tests/golden.json`），保证前后端算出一个结果
+
+详细文档 → **[`B-module-backend/README.md`](B-module-backend/README.md)**
 
 ## 目录结构
 
@@ -62,9 +80,15 @@ cd A-module-frontend/mock-server && node server.js    # 零依赖，8787 端口�
 ├── GIT_使用指南.md              ← 四人 Git 工作流 + 回退手册（每人必读，5 分钟）
 ├── docs/                        ← PRD v1.1 / 验收清单 / 四人任务卡 / 完整方案
 ├── prototype/                   ← SVG 版原型 Demo（历史参考）
-├── A-module-frontend/           ← A：Vue 工程 + 仓鼠素材 + mock 服务 + seed + 接口契约（→ 目录内 README.md）
+├── A-module-frontend/           ← A：Vue 工程 + 仓鼠素材 + 原型 + mock 服务 + seed + 接口契约
+├── B-module-backend/            ← B：FastAPI 后端 + 状态引擎 + 29 个 pytest + golden 对拍
 ├── C-module-recognition/        ← C：AI 学习截图识别（负责人：Nina）
-├── B-module-backend/            ← B：接口与状态引擎（当前唯一阻塞，README 里有三个 P0）
+│   ├── README.md                ← C 模块完整文档（从这里看起）
+│   ├── recognize.js             ← 核心交付物：单文件识别模块
+│   ├── index.html               ← C 侧演示页
+│   ├── phrases.json             ← 鼓励话术（A 定稿 12 条）
+│   ├── batch-test.js            ← 跑批测试脚本
+│   └── docs/                    ← A⇄C 接口契约（单一事实源）
 ├── D-module-materials/          ← D：seed / 逐字稿 / pitch
 └── handoff-snapshot-1300/       ← 13:00 A+C 联调成果冻结快照（只读基线，谁都不许改）
 ```
