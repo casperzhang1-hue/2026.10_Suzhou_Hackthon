@@ -1,10 +1,10 @@
 <script setup>
-import { ref, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import UploadCard from './components/UploadCard.vue'
 import ConfirmCard from './components/ConfirmCard.vue'
 import FallbackChips from './components/FallbackChips.vue'
 import TodayScreen from './components/TodayScreen.vue'
-import { recognize, submitRecord } from './api'
+import { recognize, submitRecord, fetchToday, API_BASE } from './api'
 import { isNotStudyResult } from './warnings'
 import { SCENARIOS } from './mockData'
 import { recognitionToPetInput } from './bridge' // C 的 Recognition → 宠物参数桥
@@ -15,6 +15,16 @@ const recognition = ref(null)
 const lastLevel = ref(null)
 const lastPetInput = ref(null)
 const scenario = ref('normal')
+
+// 今日状态：来自 B 的 GET /api/today（缺口行、宠物形态、活力值都由它给）
+const today = ref(null)
+
+async function loadToday() {
+  today.value = await fetchToday()
+}
+
+// 进页面就拉一次；后端没起时 fetchToday 内部会回落并打 offline 标记，不会抛错
+onMounted(loadToday)
 
 // 等待态分段文案：C 实测平均 5.6s、最慢 11s、超时窗口 20s（无重试）
 // 不做硬超时（C 承诺永远 resolve），只用文案管理心理预期
@@ -58,12 +68,14 @@ async function onSubmit(payload) {
   lastLevel.value = recognition.value?.encouragement?.level || 'normal'
   lastPetInput.value = recognition.value ? recognitionToPetInput(recognition.value) : null
   step.value = 'done'
+  await loadToday() // 入库后立刻刷新，让缺口行反映这次记录
 }
 
 function onManualSubmit(payload) {
   submitRecord(payload)
   lastLevel.value = 'normal'
   step.value = 'done'
+  loadToday()
 }
 
 function reset() {
@@ -82,6 +94,11 @@ function reset() {
       <select v-model="scenario">
         <option v-for="s in SCENARIOS" :key="s.key" :value="s.key">{{ s.label }}</option>
       </select>
+      <!-- 后端连通状态：现场排查跨域 / 端口最省时间的一行 -->
+      <span class="api-status" :class="today && !today.offline ? 'on' : 'off'">
+        后端 {{ today && today.base ? today.base : API_BASE }}
+        <b>{{ today ? (today.offline ? '未连通' : '已连通') : '检测中' }}</b>
+      </span>
     </div>
 
     <UploadCard v-if="step === 'upload'" @recognize="onRecognize" />
@@ -93,7 +110,24 @@ function reset() {
 
     <ConfirmCard v-else-if="step === 'confirm'" :recognition="recognition" @submit="onSubmit" @cancel="reset" />
     <FallbackChips v-else-if="step === 'fallback'" @submit="onManualSubmit" @cancel="reset" />
-    <TodayScreen v-else-if="step === 'done'" :level="lastLevel" :pet-input="lastPetInput" @again="reset" />
+    <TodayScreen v-else-if="step === 'done'" :level="lastLevel" :pet-input="lastPetInput" :today="today" @again="reset" />
   </main>
 </template>
+
+<style scoped>
+.api-status {
+  margin-left: 10px;
+  font-size: 11.5px;
+  color: #8a8578;
+}
+.api-status b {
+  margin-left: 4px;
+}
+.api-status.on b {
+  color: #2e7d52;
+}
+.api-status.off b {
+  color: #c0392b;
+}
+</style>
 

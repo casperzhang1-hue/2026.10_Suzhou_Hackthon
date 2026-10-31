@@ -79,7 +79,7 @@ JS_ANCHOR = "$$('.shot').forEach(function(b){ b.onclick = function(){ pickPreset
 JS_ADD = JS_ANCHOR + """
 
 /* =========================================================
-   4.5 真识别链路（C 模块 recognize.js · 接口 v1.1 r3）
+   4.5 真识别链路（C 模块 recognize.js · 接口 v1.1 r5）
    ========================================================= */
 var MODULE_LIST = ['言语理解','判断推理','数量关系','资料分析','常识判断','申论'];
 
@@ -342,7 +342,7 @@ for name, old, new in PATCHES:
 recog_safe = recog.replace("</script", "<\\/script").replace("<script", "<\\script")
 assert "</script" not in recog_safe and "<script" not in recog_safe
 assert "</body>" in html
-html = html.replace("</body>", "<script>\n/* ===== C 模块 recognize.js v1.1-r3 内联 ===== */\n" + recog_safe + "\n</script>\n</body>")
+html = html.replace("</body>", "<script>\n/* ===== C 模块 recognize.js v1.1-r5 内联 ===== */\n" + recog_safe + "\n</script>\n</body>")
 print("patch ok: recognize.js 内联")
 
 open(OUT_DEV, "w", encoding="utf-8").write(html)

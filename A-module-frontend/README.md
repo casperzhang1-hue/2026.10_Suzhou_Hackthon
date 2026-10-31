@@ -55,7 +55,41 @@ B 的三个接口没交、D 的 seed 逾期，光有素材链路照样是断的�
 | `seed/` | D 逾期，A 先造 45 天兜底数据，D 来了直接替换 |
 | `contract/` | B 有明确的字段表照着实现，不用猜 |
 
-**B 交付后，前端只改 `app/src/api.js` 里的 `API_BASE` 一个常量，业务代码一行不动。**
+---
+
+## 二·补、15:30 本次改动（任务一 + 任务二）
+
+依据 D 的 `docs/合并后复评_1510.md`，A 被点了 5 条。本次修掉其中 3 条 P0/P1：
+
+| # | 问题 | 处理 |
+|---|---|---|
+| A-1 🔴 | 缺口行硬编码：按话术档位猜「本周欠 2 次」，**根本没读数据** | ✅ 删掉硬编码，改读 `today.gap.owed` |
+| A-2 🔴 | `fetchToday()` 写好了但 `App.vue` 里 0 次调用，等于没插电 | ✅ `onMounted` 真的发起调用，入库后立刻刷新 |
+| A-5 🔴 | `API_BASE` 指向我自己的 mock（8787），不是 B 的服务 | ✅ 改自动探测 `8000 → 8015 → 8787` |
+| A-3 🟡 | 原型内联的是 C 的 r3，C 已到 r5 | ✅ 覆盖 `app/public/recognize.js`，重建两版原型 |
+| A-4 🟡 | 工程缺记忆屏 / 出分日屏 | ⏸ 按 D 判断不补（原型里已有），已 `npm run build` 通过 |
+
+**改动文件**：
+
+```
+app/src/api.js                        后端地址自动探测 + 1.5s 超时 + 离线缓存回落
+app/src/App.vue                       进页面拉 /api/today，顶部显示后端连通状态
+app/src/components/TodayScreen.vue    缺口行读数据；形态优先用后端 pet_state
+app/public/recognize.js               C 的 v1.1-r5
+原型/仓鼠陪跑_原型_接真数据版.html        重建（内联 r5）
+原型/仓鼠陪跑_原型_接真数据_单文件版.html   重建（内联 r5，408KB，双击即开）
+原型/build_realdata.py                版本标记 r3 → r5
+```
+
+**实测**（本机真跑）：
+
+- `GET /api/today` 真实响应 `gap.owed = 1` → 界面渲染 `本周 4/5，还欠 1 次` ✅
+- 后端没给 `gap` → 显示 `本周缺口 —`（**不编数字**）✅
+- 完全拉不到 → 用上次缓存 + 灰色「离线 · 上次同步」标记 ✅
+- r5 识别 test5：`excellent · 粉笔 · 115分 · 135题 · 81% · 6.8s`，与 r4 一致无退化 ✅
+- `npm run build` 通过（27 modules，1.1s）✅
+
+**给 B 的完整对接说明 → [`docs/给B的对接材料.md`](docs/给B的对接材料.md)**
 
 ---
 
@@ -112,15 +146,21 @@ r5 已全量接入（`app/public/recognize.js`），这里只是留档。识别�
 ## 五、本地跑通全链路（三步）
 
 ```bash
-# 1. 起 mock 后端（B 交付前，零依赖不用 npm install）
+# 1. 起后端（二选一）
+#    B 的真后端（已交付）：
+cd ../../B-module-backend && HAMSTER_TODAY=2026-10-31 uvicorn app.main:app --port 8000
+#    A 的 mock 兜底（B 没起时用，零依赖不用 npm install）：
 cd A-module-frontend/mock-server && node server.js      # http://127.0.0.1:8787
 
-# 2. 起前端
+# 2. 起前端 —— 必须是 5173，B 的 CORS 只放了这个端口
 cd A-module-frontend/app && npm install && npm run dev   # http://127.0.0.1:5173
 
 # 3. 接真识别
 #    把 src/api.js 的 USE_MOCK 改成 false
 ```
+
+后端地址**不用手填**：`api.js` 会按 `8000 → 8015 → 8787` 自动探测第一个通的，
+顶部会显示「后端 http://127.0.0.1:xxxx 已连通」。想固定就在 `.env` 写 `VITE_API_BASE`。
 
 **不想装依赖？** 直接双击 `原型/仓鼠陪跑_原型_接真数据_单文件版.html`，图片和 recognize.js 都已内嵌。
 

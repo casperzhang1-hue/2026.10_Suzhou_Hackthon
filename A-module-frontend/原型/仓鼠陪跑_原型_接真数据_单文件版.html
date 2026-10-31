@@ -1030,7 +1030,7 @@ $('#btnConfirm').onclick = function(){
 $$('.shot').forEach(function(b){ b.onclick = function(){ pickPreset(b.dataset.preset); }; });
 
 /* =========================================================
-   4.5 真识别链路（C 模块 recognize.js · 接口 v1.1 r3）
+   4.5 真识别链路（C 模块 recognize.js · 接口 v1.1 r5）
    ========================================================= */
 var MODULE_LIST = ['言语理解','判断推理','数量关系','资料分析','常识判断','申论'];
 
@@ -1551,7 +1551,7 @@ if(Q.get('sheet') === 'open'){ openSheet(); }
 if(Q.get('step') === 'confirm'){ pickPreset(Q.get('preset') || 'good'); }
 </script>
 <script>
-/* ===== C 模块 recognize.js v1.1-r3 内联 ===== */
+/* ===== C 模块 recognize.js v1.1-r5 内联 ===== */
 /* 监督小宠 · C 模块 学习截图识别 v1.1
  * ------------------------------------------------------------
  * 给 A 模块（前端）用的唯一引入文件。
@@ -1580,9 +1580,9 @@ if(Q.get('step') === 'confirm'){ pickPreset(Q.get('preset') || 'good'); }
     // "非学习图片"（test7 实测：10s 窗口两次超时兜底，35s 窗口 5.2s 即正确识别）。
     // 故放宽单次窗口到 20 秒、取消重试——慢响应重试大概率仍超时，且会把最坏耗时翻倍。
     // 最坏情况 20 秒，需在 A 等待态设计中留足。
-    // 多轮跑批口径（10 张真实学习截图，20s 窗口+不重试）：平均 5.4~5.7s，
-    // 最快约 2.5s，最慢 10~11.6s（auto 模型响应本身有波动）。全部一次成功、无重试。
-    // 路演材料引用耗时请以此区间为准，不要写单点值。
+    // 多轮跑批口径（10 张真实学习截图 × 数轮，20s 窗口+不重试）：
+    // 平均 5.4~6.9s，最快约 2.4s，最慢 10.8~14.3s（auto 模型响应本身有波动）。
+    // 全部一次成功、无重试。路演材料引用耗时请以此区间为准，不要写单点值。
     TIMEOUT_MS: 20000,        // 单次调用超时；最坏情况 20 秒（不重试）
     MAX_RETRIES: 0,           // 不重试：对"偶发慢响应"，重试收效低且翻倍最坏耗时
     MAX_FILE_BYTES: 10 * 1024 * 1024,
@@ -1734,6 +1734,13 @@ if(Q.get('step') === 'confirm'){ pickPreset(Q.get('preset') || 'good'); }
       if (modelAcc === null) {
         result.accuracy = Math.round((sumCorrect / sumQuestions) * 100) / 100;
       }
+    }
+
+    // 模型偶尔把正确率写成百分制（0.75 写成 75），前端直接乘 100 会显示 7500%，
+    // 且等级判定会被推到 excellent。统一归一到 0~1。
+    // 注意：accuracy === 1 是合法的 100%，不参与归一。
+    if (isNum(result.accuracy) && result.accuracy > 1 && result.accuracy <= 100) {
+      result.accuracy = Math.round((result.accuracy / 100) * 100) / 100;
     }
 
     // total_questions：模型没给就用模块求和（declared 已在上方声明）
@@ -1941,7 +1948,9 @@ if(Q.get('step') === 'confirm'){ pickPreset(Q.get('preset') || 'good'); }
     "3. confidence是你能从这张图里提取到学习数据的把握程度：低于0.5判定为不可识别，按规则4处理；0.5到0.6之间写入SCREENSHOT_BLURRY警告",
     "4. 如果图片不是学习记录、刷题报告或学习数据截图（如风景、动物、人物、表情包等），或者confidence低于0.5，必须判定为不可识别：source_app/event_date/event_time/duration_minutes/total_questions/accuracy全部填null，modules填空数组[]，warnings填[{\"code\":\"NOT_A_STUDY_SCREENSHOT\",\"message\":\"这张图片没有识别到学习数据\"}]，encouragement填{\"level\":\"\"}，confidence按实际填写。不得虚构任何App名称、日期、题量、正确率、模块成绩或学习时长。",
     "5. 这张图是唯一的输入来源，不要参考任何历史图片或历史结果",
-    "6. 只输出JSON，不要有多余解释"
+    "6. 耗时若以 分:秒 格式显示（如 01:44、04:52），换算成分钟并取整（01:44→2，04:52→5），绝对不要读成144或104分钟",
+    "7. 页面顶部显眼位置的百分比大数字（如橙色的27%、绿色的85%）就是正确率，换算成0到1的小数填入accuracy；即使旁边没写「正确率」三个字也要读取，不要因为排版位置不确定就漏读",
+    "8. 只输出JSON，不要有多余解释"
   ].join("\n");
 
   /* ---------------- 调用模型 ---------------- */
@@ -2051,9 +2060,14 @@ if(Q.get('step') === 'confirm'){ pickPreset(Q.get('preset') || 'good'); }
       }
       if (result.recognition.confidence === null) result.recognition.confidence = 0;
 
-      // 识别失败、或完全没有可判断的数据时，不给出等级，避免前端凭空出话术
+      // 识别失败、或完全没有可判断的数据时，不给出等级，避免前端凭空出话术。
+      // 契约自洽：level == "" 必须等价于带 NOT_A_STUDY_SCREENSHOT，
+      // 否则前端只认 warning 的分支会漏判（A 模块 P1）。
       var noData = result.accuracy === null && result.duration_minutes === null;
-      if (hasWarning(result, "NOT_A_STUDY_SCREENSHOT") || noData) {
+      if (noData) {
+        addWarning(result, "NOT_A_STUDY_SCREENSHOT", "这张图片没有识别到学习数据");
+      }
+      if (hasWarning(result, "NOT_A_STUDY_SCREENSHOT")) {
         result.encouragement = { level: "" };
       } else {
         result.encouragement = { level: calcLevel(result.accuracy, result.duration_minutes) };
