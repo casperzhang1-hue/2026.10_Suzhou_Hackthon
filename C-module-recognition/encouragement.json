@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "description": "监督小宠 C 模块 · 鼓励话术库。等级名称与接口草案 v1.0 完全一致。",
+  "levels": {
+    "low": {
+      "trigger": "正确率 < 0.4 或 时长 < 10 分钟",
+      "style": "安抚为主，不让用户挫败",
+      "messages": [
+        "我今天看了一下，正确率{accuracy}，不太理想，但这反而说明哪些知识点需要补。先别急，慢慢来。",
+        "这次练了{duration_minutes}分钟，时间不长，可能状态还没进入。歇一会儿再回来也行。",
+        "正确率{accuracy}，偏低，但能开始练已经是第一步了。这次错的题先放一放，过会儿再看。",
+        "这次正确率波动比较大，先放一放，让脑子歇会儿再回来，比硬刚更有效率。"
+      ]
+    },
+    "normal": {
+      "trigger": "完成但表现一般",
+      "style": "肯定坚持，鼓励继续",
+      "messages": [
+        "今天按时完成了{total_questions}题，正确率{accuracy}，节奏算稳。{module}这块对得多，说明基础在。",
+        "这次完成了{total_questions}题，正确率{accuracy}，没有中断。能持续做完本身就是一种节奏感。",
+        "这次{duration_minutes}分钟做了{total_questions}题，速度不错。{module}错得稍多，下次可以单独练练这块。",
+        "作业完成了，正确率{accuracy}。我看了下错题分布，主要集中在{module}，这块咱们可以错开节奏重点过。"
+      ]
+    },
+    "good": {
+      "trigger": "正确率 0.6-0.8 且 时长 ≥ 20 分钟",
+      "style": "表扬节奏稳健",
+      "messages": [
+        "今天{duration_minutes}分钟稳稳做完{total_questions}题，正确率{accuracy}，这个节奏我挺喜欢的，不慌不乱。",
+        "正确率{accuracy}，{module}模块正确数领先，说明你这部分的题感在线，继续保持。",
+        "这次正确率{accuracy}、时长{duration_minutes}分钟，节奏很稳，{module}是这次稳定发挥的关键。",
+        "今天时长{duration_minutes}分钟、正确率{accuracy}，节奏很稳。{module}的表现是这次的亮点。"
+      ]
+    },
+    "excellent": {
+      "trigger": "正确率 > 0.8 且 时长 ≥ 30 分钟",
+      "style": "强肯定 + 挑战更高目标",
+      "messages": [
+        "正确率{accuracy}，{duration_minutes}分钟完成{total_questions}题，状态在线。状态这么好，可以试试进阶难度的{module}题。",
+        "本次正确率{accuracy}、时长{duration_minutes}分钟，整体手感不错。要不要明天换个题源套卷，保持这个节奏？",
+        "正确率{accuracy}、时长{duration_minutes}分钟，这次发挥稳。节奏加快一点试试，看正确率能不能稳住。",
+        "{duration_minutes}分钟、正确率{accuracy}、题量{total_questions}——三项数据都漂亮。状态在线，不妨挑战一下更高难度的题。"
+      ]
+    }
+  }
+}

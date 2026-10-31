@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>监督小宠</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    min-height: 100vh;
+    padding: 24px;
+    line-height: 1.6;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 {
+    font-size: 24px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .subtitle { color: #86868b; font-size: 14px; margin-bottom: 24px; }
+
+  .upload-area {
+    border: 2px dashed #c7c7cc;
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    background: #fff;
+    transition: all 0.2s;
+    cursor: pointer;
+    margin-bottom: 16px;
+  }
+  .upload-area:hover, .upload-area.dragover {
+    border-color: #0071e3;
+    background: #f0f6ff;
+  }
+  .upload-icon { font-size: 36px; margin-bottom: 8px; }
+  .upload-text { font-size: 15px; color: #1d1d1f; }
+  .upload-hint { font-size: 12px; color: #86868b; margin-top: 4px; }
+  #fileInput { display: none; }
+
+  .preview-wrap {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .preview-wrap img {
+    max-width: 100%;
+    max-height: 360px;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 10px 24px;
+    border-radius: 8px;
+    border: none;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-primary { background: #0071e3; color: #fff; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:disabled {
+    background: #c7c7cc;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+  .actions { margin-bottom: 16px; }
+
+  .status {
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .status.loading { background: #e8f0fe; color: #1a73e8; display: block; }
+  .status.error { background: #fce8e6; color: #d93025; display: block; }
+  .status.success { background: #e6f4ea; color: #137333; display: block; }
+
+  .result-grid { display: grid; gap: 16px; margin-bottom: 16px; }
+  .result-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .result-card h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: #86868b;
+    margin-bottom: 12px;
+  }
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f2;
+    font-size: 14px;
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-label { color: #86868b; }
+  .result-value { color: #1d1d1f; font-weight: 500; }
+
+  .encouragement-box {
+    background: linear-gradient(135deg, #fff 0%, #fff8f0 100%);
+    border: 1px solid #f0e0c0;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    font-size: 16px;
+    color: #4a3a1a;
+    line-height: 1.7;
+    display: none;
+  }
+  .encouragement-box::before {
+    content: "监督小宠说：";
+    display: block;
+    font-size: 12px;
+    color: #b8860b;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .json-card {
+    background: #1d1d1f;
+    color: #f5f5f7;
+    border-radius: 12px;
+    padding: 16px;
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+    margin-bottom: 16px;
+    display: none;
+  }
+
+  .footer { color: #86868b; font-size: 12px; text-align: center; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>监督小宠</h1>
+  <p class="subtitle">AI 学习截图识别 · 拖入截图，自动识别学习数据</p>
+
+  <div class="upload-area" id="uploadArea">
+    <div class="upload-icon">📷</div>
+    <div class="upload-text">点击或拖拽学习截图到这里</div>
+    <div class="upload-hint">支持 PNG / JPG / JPEG / WEBP</div>
+  </div>
+  <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp">
+
+  <div class="preview-wrap" id="previewWrap">
+    <img id="previewImg" alt="截图预览">
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="recognizeBtn" disabled>开始识别</button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="encouragement-box" id="encouragementBox"></div>
+
+  <div class="result-grid" id="resultGrid"></div>
+
+  <pre class="json-card" id="jsonCard"></pre>
+
+  <div class="footer">监督小宠 · C 模块 v1.1</div>
+</div>
+
+<!-- C 模块识别能力 v1.1：单文件自包含，A 模块可直接 <script src="recognize.js"> 引入 -->
+<script src="recognize.js"></script>
+<script>
+(function () {
+  const internals = window.__recognizeInternals;
+
+  let encouragementData = null;
+  let currentFile = null;
+
+  const uploadArea = document.getElementById("uploadArea");
+  const fileInput = document.getElementById("fileInput");
+  const previewWrap = document.getElementById("previewWrap");
+  const previewImg = document.getElementById("previewImg");
+  const recognizeBtn = document.getElementById("recognizeBtn");
+  const statusEl = document.getElementById("status");
+  const encouragementBox = document.getElementById("encouragementBox");
+  const resultGrid = document.getElementById("resultGrid");
+  const jsonCard = document.getElementById("jsonCard");
+
+  uploadArea.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+  uploadArea.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    uploadArea.classList.add("dragover");
+  });
+  uploadArea.addEventListener("dragleave", () => uploadArea.classList.remove("dragover"));
+  uploadArea.addEventListener("drop", (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove("dragover");
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+
+  recognizeBtn.addEventListener("click", () => {
+    if (currentFile) runRecognize(currentFile);
+  });
+
+  function handleFile(file) {
+    const okTypes = ["image/png", "image/jpeg", "image/webp"];
+    if (!okTypes.includes(file.type)) {
+      showStatus("error", "不支持的图片格式，请上传 PNG / JPG / JPEG / WEBP。");
+      return;
+    }
+    currentFile = file;
+    // 立即清空上一次的识别结果、鼓励语、JSON 和错误状态，不等图片预览加载
+    hideResults();
+    hideStatus();
+    recognizeBtn.disabled = true;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      previewImg.src = e.target.result;
+      previewWrap.style.display = "block";
+      recognizeBtn.disabled = false;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function loadEncouragement() {
+    if (encouragementData) return encouragementData;
+    const res = await fetch("encouragement.json");
+    if (!res.ok) throw new Error("话术库加载失败 (encouragement.json)。");
+    encouragementData = await res.json();
+    return encouragementData;
+  }
+
+
+  function pickMessage(messages) {
+    return messages[Math.floor(Math.random() * messages.length)];
+  }
+
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return "null";
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // 从识别结果里挑出正确率最高的模块名；若没有任何模块带真实正确数，返回 null
+  function pickBestModule(data) {
+    if (!data.modules || data.modules.length === 0) return null;
+    const valid = data.modules.filter(function (m) {
+      return (
+        typeof m.correct_count === "number" &&
+        typeof m.question_count === "number" &&
+        m.question_count > 0
+      );
+    });
+    if (valid.length === 0) return null;
+    const best = valid.sort(function (a, b) {
+      return b.correct_count / b.question_count - a.correct_count / a.question_count;
+    })[0];
+    return best.name;
+  }
+
+  function canFill(tpl, data) {
+    const placeholders = tpl.match(/\{[^}]+\}/g) || [];
+    for (const p of placeholders) {
+      const key = p.slice(1, -1);
+      if (key === "accuracy" && (data.accuracy === null || data.accuracy === undefined)) return false;
+      if (key === "total_questions" && (data.total_questions === null || data.total_questions === undefined)) return false;
+      if (key === "duration_minutes" && (data.duration_minutes === null || data.duration_minutes === undefined)) return false;
+      if (key === "module" && !pickBestModule(data)) return false;
+    }
+    return true;
+  }
+
+  function fillTemplate(tpl, data) {
+    let out = tpl;
+    const accuracyPct =
+      data.accuracy !== null && data.accuracy !== undefined
+        ? Math.round(data.accuracy * 100) + "%"
+        : null;
+
+    out = out.replace(/\{accuracy\}/g, accuracyPct || "未知");
+    out = out.replace(/\{total_questions\}/g, data.total_questions ?? "未知");
+    out = out.replace(/\{duration_minutes\}/g, data.duration_minutes ?? "未知");
+
+    // 只在有真实正确数的模块里挑表现最好的一个；correct_count 为 null 的模块不参与
+    const moduleName = pickBestModule(data) || "本次";
+    out = out.replace(/\{module\}/g, moduleName);
+
+    if (/\{[^}]+\}/.test(out)) {
+      out = out.replace(/\{[^}]+\}/g, "");
+    }
+    return out;
+  }
+
+  function renderResults(data) {
+    const rows = [
+      ["用户 ID", escapeHtml(data.user_id)],
+      ["来源 App", escapeHtml(data.source_app)],
+      ["学习日期", escapeHtml(data.event_date)],
+      ["学习时间", escapeHtml(data.event_time)],
+      ["学习时长", data.duration_minutes != null ? data.duration_minutes + " 分钟" : "null"],
+      ["总题量", escapeHtml(data.total_questions)],
+      ["正确率", data.accuracy != null ? (Math.round(data.accuracy * 100) + "%") : "null"],
+      ["识别置信度", data.recognition && data.recognition.confidence != null ? data.recognition.confidence : "null"],
+    ];
+
+    let modulesHtml = "";
+    if (data.modules && data.modules.length > 0) {
+      modulesHtml = data.modules
+        .map(
+          (m) =>
+            '<div class="result-row"><span class="result-label">' +
+            escapeHtml(m.name) +
+            '</span><span class="result-value">' +
+            escapeHtml(m.correct_count) + ' / ' + escapeHtml(m.question_count) +
+            '</span></div>'
+        )
+        .join("");
+    }
+
+    let warningsHtml = "";
+    if (data.warnings && data.warnings.length > 0) {
+      warningsHtml = data.warnings
+        .map(
+          (w) =>
+            '<div class="result-row"><span class="result-label">' +
+            escapeHtml(w.code) +
+            '</span><span class="result-value">' +
+            escapeHtml(w.message) +
+            '</span></div>'
+        )
+        .join("");
+    }
+
+    resultGrid.innerHTML =
+      '<div class="result-card"><h3>学习数据</h3>' +
+      rows
+        .map(
+          (r) =>
+            '<div class="result-row"><span class="result-label">' +
+            r[0] +
+            '</span><span class="result-value">' +
+            r[1] +
+            '</span></div>'
+        )
+        .join("") +
+      "</div>" +
+      (modulesHtml
+        ? '<div class="result-card"><h3>各模块明细</h3>' + modulesHtml + "</div>"
+        : "") +
+      (warningsHtml
+        ? '<div class="result-card"><h3>异常提示</h3>' + warningsHtml + "</div>"
+        : "");
+
+    const encouragementData = data.encouragement;
+    if (encouragementData && encouragementData.message) {
+      encouragementBox.textContent = encouragementData.message;
+      encouragementBox.style.display = "block";
+    }
+
+    jsonCard.textContent = JSON.stringify(data, null, 2);
+    jsonCard.style.display = "block";
+  }
+
+  function hideResults() {
+    resultGrid.innerHTML = "";
+    encouragementBox.style.display = "none";
+    jsonCard.style.display = "none";
+  }
+
+  function showStatus(type, msg) {
+    statusEl.className = "status " + type;
+    statusEl.textContent = msg;
+  }
+  function hideStatus() {
+    statusEl.className = "status";
+  }
+
+  async function runRecognize(file, userId) {
+    hideResults();
+    recognizeBtn.disabled = true;
+    showStatus("loading", "正在识别，请稍候…");
+    try {
+      // 识别逻辑全部在 recognize.js（v1.1）。它任何情况下都返回标准对象，不抛异常。
+      const result = await window.recognizeScreenshot(file, userId || "demo_zhang");
+
+      // 接口只输出 level。本页为了演示「宠物会说人话」，
+      // 自己从 encouragement.json 补一条 message，不影响交给 A 的接口对象。
+      const isInvalid = internals.hasWarning(result, "NOT_A_STUDY_SCREENSHOT");
+      if (!isInvalid && result.encouragement && result.encouragement.level) {
+        const enc = await loadEncouragement();
+        const levelData = enc.levels[result.encouragement.level];
+        if (levelData) {
+          // 只选变量都能填上的话术，避免显示未替换的占位符
+          const usable = levelData.messages.filter(function (tpl) {
+            return canFill(tpl, result);
+          });
+          const pool = usable.length > 0 ? usable : levelData.messages;
+          result.encouragement.message = fillTemplate(pickMessage(pool), result);
+        }
+      }
+
+      renderResults(result);
+      if (isInvalid) {
+        showStatus("error", "这张图片暂时没有识别到学习数据，请上传学习记录或刷题截图。");
+      } else {
+        showStatus("success", "识别完成。");
+      }
+      return result;
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      showStatus("error", "识别失败：" + msg + "　你可以换一张清晰的截图重试，或手动填写数据。");
+      return null;
+    } finally {
+      recognizeBtn.disabled = false;
+    }
+  }
+
+  window.addEventListener("error", (e) => {
+    showStatus("error", "页面发生错误：" + (e.message || "未知错误"));
+  });
+
+  // 启动自检：确认 recognize.js 已加载
+  if (typeof window.recognizeScreenshot !== "function") {
+    showStatus("error", "识别模块 recognize.js 未加载，请确认它与 index.html 放在同一目录。");
+  }
+})();
+</script>
+</body>
+</html>
