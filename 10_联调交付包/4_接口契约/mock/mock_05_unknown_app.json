@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "recognition": { "recognized_at": "2026-10-30T23:30:41+08:00", "confidence": 0.55 },
+  "source_app": null,
+  "event_date": "2026-10-30",
+  "event_time": null,
+  "duration_minutes": 55,
+  "modules": [
+    { "name": "申论", "question_count": 2, "correct_count": null }
+  ],
+  "total_questions": 2,
+  "accuracy": null,
+  "warnings": [
+    { "code": "UNRECOGNIZED_APP", "message": "这个 App 我还在学，帮我标一下来源" },
+    { "code": "DURATION_MISSING", "message": "没认出学习时长，手动填一下" }
+  ],
+  "encouragement": { "level": "normal", "message": "记录下来了。" }
+}

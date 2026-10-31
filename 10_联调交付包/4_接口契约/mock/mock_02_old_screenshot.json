@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "recognition": { "recognized_at": "2026-10-31T08:40:00+08:00", "confidence": 0.88 },
+  "source_app": "粉笔",
+  "event_date": "2026-10-28",
+  "event_time": "20:10",
+  "duration_minutes": 42,
+  "modules": [
+    { "name": "资料分析", "question_count": 20, "correct_count": 13 }
+  ],
+  "total_questions": 20,
+  "accuracy": 0.65,
+  "warnings": [
+    { "code": "OLD_SCREENSHOT", "message": "这是 3 天前的学习记录，将记到 10月28日" }
+  ],
+  "encouragement": { "level": "normal", "message": "补上的记录我都收好了。" }
+}

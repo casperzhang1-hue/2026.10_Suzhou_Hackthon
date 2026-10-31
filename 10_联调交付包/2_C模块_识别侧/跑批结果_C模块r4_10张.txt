@@ -1,0 +1,27 @@
+=== 监督小宠 C 模块 · 跑批测试 ===
+识别模块: D:\workbuddy1\2026-10-31-08-28-48\frontend-contract\recognize.js
+待测图片: 10 张
+
+SDK: cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@0.1.4-dev.ca27990.202610161713/lib/index.global.js
+配置: 超时 20000ms / 重试 0 次
+
+  ✓ test1.jpg → normal | 粉笔 · 2026-10-20 · 17分 · 20题 · 95% | 3404ms | warnings=[OLD_SCREENSHOT]
+  ✓ test2.jpg → low | 粉笔 · 2026-08-19 · 8分 · 10题 · 70% | 4391ms | warnings=[OLD_SCREENSHOT]
+  ✓ test3.jpg → low | App未知 · 2026-08-26 · 1分 · 30题 · 77% | 2469ms | warnings=[DURATION_TOO_SHORT,UNRECOGNIZED_APP,OLD_SCREENSHOT]
+  ✓ test4.jpg → low | 粉笔 · 2026-08-26 · 0分 · 15题 · 93% | 2162ms | warnings=[DURATION_TOO_SHORT,OLD_SCREENSHOT]
+  ✓ test5.jpg → excellent | App未知 · 2026-10-30 · 115分 · 135题 · 81% | 2592ms | warnings=[MODULE_MISMATCH,UNRECOGNIZED_APP]
+  ✓ test6.jpg → low | App未知 · 2026-10-28 · 3分 · 130题 · 62% | 8887ms | warnings=[MODULE_MISMATCH,DURATION_TOO_SHORT,UNRECOGNIZED_APP,OLD_SCREENSHOT]
+  ✓ test7.jpg → low | App未知 · 2026-10-25 · 4分 · 130题 · 75% | 9542ms | warnings=[MODULE_MISMATCH,DURATION_TOO_SHORT,UNRECOGNIZED_APP,OLD_SCREENSHOT]
+  ✓ test8.jpg → normal | App未知 · 2026-06-08 · 105分 · 100题 · 正确率未知 | 9533ms | warnings=[UNRECOGNIZED_APP,OLD_SCREENSHOT]
+  ✓ test9.jpg → normal | App未知 · 日期未知 · 21分 · 62题 · 正确率未知 | 7124ms | warnings=[UNRECOGNIZED_APP]
+  ✓ test10.jpg → low | App未知 · 2025-11-21 · 0分 · 135题 · 56% | 6483ms | warnings=[MODULE_MISMATCH,DURATION_TOO_SHORT,UNRECOGNIZED_APP,OLD_SCREENSHOT]
+
+=== 汇总 ===
+总图片数:      10
+出合法 JSON:   10 / 10（100%）
+  其中学习截图: 10
+  非学习已拒绝: 0
+  失败:         0
+耗时:          最快 2162ms / 最慢 9542ms / 平均 5659ms
+
+任务卡验收口径（学习类 10 张）: 10/10  ✓ 达标（≥5/6）

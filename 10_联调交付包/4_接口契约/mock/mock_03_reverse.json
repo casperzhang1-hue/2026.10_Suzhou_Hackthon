@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "recognition": { "recognized_at": "2026-10-30T23:10:12+08:00", "confidence": 0.71 },
+  "source_app": "粉笔",
+  "event_date": "2026-10-30",
+  "event_time": "22:40",
+  "duration_minutes": 28,
+  "modules": [
+    { "name": "资料分析", "question_count": 12, "correct_count": 20 }
+  ],
+  "total_questions": 20,
+  "accuracy": 0.6,
+  "warnings": [
+    { "code": "CORRECT_COUNT_INVALID", "message": "正确数大于题量，请核对一下" }
+  ],
+  "encouragement": { "level": "normal", "message": "数字有点怪，改完我再记。" }
+}
