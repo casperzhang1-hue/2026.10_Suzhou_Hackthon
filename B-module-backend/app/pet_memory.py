@@ -49,6 +49,13 @@ _FIRST_PERSON = re.compile(r"我")
 # 旁白句式：以「你」开头，或含「那天你」。这类是系统摘要，不是原话
 _NARRATION = re.compile(r"^(那天|那晚|那次)?你|他说|用户")
 
+# 否认句不是情绪记录。「我不累啊」是在反驳，不是在交代状态——
+# 记下来之后，它下次就会拿这句当素材说「你刚说不累」，一句废话被复读三轮。
+_DENIAL = re.compile(
+    r"(?:不|没|没有|才不|并不|一点都不|压根不)[^，。！？、；]{0,4}?"
+    r"(?:累|困|倦|难受|崩|烦|慌|焦虑|怕)"
+)
+
 MAX_QUOTE = 80
 
 
@@ -92,7 +99,8 @@ def classify(text: str) -> str | None:
         return "promise"
     if any(w in t for w in _PREFER):
         return "prefer"
-    if any(w in t for w in _FEELING):
+    # 情绪词要先剥掉否认再看：「我不累啊」里的「累」不是他的状态
+    if any(w in _DENIAL.sub("", t) for w in _FEELING):
         return "feeling"
     if any(w in t for w in _EVENT):
         return "event"

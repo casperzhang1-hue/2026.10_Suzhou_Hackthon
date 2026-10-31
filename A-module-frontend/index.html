@@ -302,6 +302,8 @@ b,strong{font-weight:600}
 .pchat-handle{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.16);margin:0 auto 14px}
 .pchat-title{font-size:16px;font-weight:600;letter-spacing:.01em}
 .pchat-sub{font-size:12px;color:var(--ink3);margin:3px 0 12px}
+/* 它拿主意要有个凭据。这一行就是它看的账：今天多少分钟、本周还差几天 */
+.pchat-ctx{font-size:11px;color:var(--ink3);line-height:1.5;background:rgba(127,127,127,.14);border-radius:8px;padding:7px 9px;margin:-2px 0 10px}
 .pchat-log{max-height:236px;overflow:auto;display:flex;flex-direction:column;gap:9px;padding:2px 0 10px;scrollbar-width:none;-ms-overflow-style:none}
 .pchat-log::-webkit-scrollbar{display:none}
 .pchat-line{display:flex;flex-direction:column;max-width:87%}
@@ -1088,6 +1090,7 @@ function ensureChat(){
       '<div class="pchat-handle"></div>' +
       '<div class="pchat-title">跟它说两句</div>' +
       '<div class="pchat-sub" id="petEngine">正在找它……</div>' +
+      '<div class="pchat-ctx" id="petCtx"></div>' +
       '<div class="pchat-log" id="petChatLog"></div>' +
       '<div class="pchat-topics" id="petChatTopics"></div>' +
       '<div class="pchat-say">' +
@@ -1104,6 +1107,7 @@ function ensureChat(){
 
   var log = $('.pchat-log', box);
   var topics = $('.pchat-topics', box);
+  renderPetCtx();
 
   PET_TOPICS.forEach(function(t){
     var b = document.createElement('button');
@@ -1325,6 +1329,11 @@ function petSay(text, intent){
       var meta = d.source === 'model'
         ? ((d.persona || '团团') + ' · ' + d.model)
         : '模型没接上，它凭记忆说';
+      /* 这一轮它在拿主意。标出来，他才知道「今天够了」不是随口说的，
+         是照着上面那行账算的 */
+      if(d.facts && d.facts.mode === 'advice'){
+        meta = d.source === 'model' ? '按上面那行账算的' : '账算过了，嘴没连上';
+      }
       /* 它这一轮真的把他的话记进库了，就在来源旁边标一下。
          不标的话，「它有记性」这件事只有我看得到，他看不到。 */
       if(d.remembered) meta += ' · 记下了';
@@ -2079,14 +2088,39 @@ function probeBackend(){
 
 function applyServerToday(t){
   if(!t) return;
+  window.PET_TODAY = t;
   if(typeof t.vitality === 'number') APP.vitality = t.vitality;
   if(t.pet_state && SERVER_PET[t.pet_state]) APP.state = SERVER_PET[t.pet_state];
   if(t.gap && typeof t.gap.owed === 'number') APP.gap = t.gap.owed;
   APP.missed = t.missed_days || 0;
   APP.hasRecord = !!t.has_record;
   renderHome();
+  renderPetCtx();
   var hint = $('#gapHint');
   if(hint) hint.textContent = t.has_record ? '今天已记下，这周的账我记着' : '明天补一次就平了';
+}
+
+/* 它拿主意时看的那本账。
+   放在面板里，是为了让「今天够了」这句话有据可查——
+   他说「凭什么够了」，抬眼就能看见 82 分钟和本周还差几天。 */
+function petCtxLine(){
+  var t = window.PET_TODAY;
+  if(!t || !t.detail) return '';
+  var d = t.detail, g = t.gap || {};
+  var parts = ['今天 ' + (d.duration_minutes || 0) + ' 分钟'];
+  if(typeof g.week_done === 'number' && typeof g.week_target === 'number'){
+    parts.push('本周 ' + g.week_done + '/' + g.week_target + ' 天');
+  }
+  if(g.owed > 0) parts.push('还差 ' + g.owed + ' 天');
+  return parts.join(' · ');
+}
+
+function renderPetCtx(){
+  var el = document.getElementById('petCtx');
+  if(!el) return;
+  var s = petCtxLine();
+  el.textContent = s;
+  el.style.display = s ? '' : 'none';
 }
 
 function syncFromServer(){

@@ -210,8 +210,14 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
 
         try:
             messages = persona.build_messages(text, facts=facts, history=history)
-            raw = pet_llm.chat(messages, temperature=0.85)
+            # 0.65 而不是更活的高温：这只宠物的活儿是「把算好的结论说成人话」，
+            # 温度一高它就开始即兴——实测 0.85 时复读上一轮的问题、自己编时长。
+            raw = pet_llm.chat(messages, temperature=0.65)
             reply = persona.sanitize(raw)
+            # 不在判断模式就不许承诺时长。删掉那个子句，别拦整句——
+            # 拦住重试它还会犯，两次过不去就掉兜底，比说错更难看
+            if facts.get("mode") != "advice":
+                reply = persona.strip_commit(reply)
             passed, reason = persona.check_reply(reply, facts=facts, user_text=text,
                                                  known_modules=known_modules)
 
@@ -219,8 +225,10 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
                 # 第一次被拦，把「哪句不行」喂回去让它自己改——只重试一次，
                 # 第二次还错说明它不会，再试只是拖时间和烧钱
                 print(f"[pet_say] 第一次被拦：{reason} | 原文：{reply[:60]}")
-                raw2 = pet_llm.chat(persona.retry_messages(messages, reply, reason), temperature=0.95)
+                raw2 = pet_llm.chat(persona.retry_messages(messages, reply, reason), temperature=0.8)
                 reply2 = persona.sanitize(raw2)
+                if facts.get("mode") != "advice":
+                    reply2 = persona.strip_commit(reply2)
                 passed2, reason2 = persona.check_reply(reply2, facts=facts, user_text=text,
                                                        known_modules=known_modules)
                 if passed2:
@@ -231,7 +239,7 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             # 模型侧的问题要留痕：现场如果一半回答都掉到兜底，看日志才知道是限流还是超时
             print(f"[pet_say] 模型不可用：{e}")
             out["guard"]["reason"] = f"模型不可用：{e}"
-            out["text"] = persona.fallback(text)
+            out["text"] = persona.fallback(text, facts=facts)
             out["ms"] = int((time.time() - t0) * 1000)
             return out
 
@@ -242,7 +250,7 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             # 说了不该说的：整句丢掉，换一句笨但真的。日志留证据，便于回看。
             print(f"[pet_say] 拦下模型回答：{reason} | 原文：{reply[:80]}")
             out["guard"] = {"ok": False, "reason": reason}
-            out["text"] = persona.fallback(text)
+            out["text"] = persona.fallback(text, facts=facts)
 
         store.add_chat(user_id=body.user_id, role="assistant", content=out["text"],
                        source=out["source"])
