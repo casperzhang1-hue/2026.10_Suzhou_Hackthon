@@ -1,6 +1,6 @@
 # A 模块 · 前端与视觉
 
-> 负责人：A（曹苏睿）｜ 2026-10-31 17:00 更新 ｜ 宠物形象：**仓鼠**（任务卡的「小芽」已作废）
+> 负责人：A（曹苏睿）｜ 2026-10-31 18:10 更新 ｜ 宠物形象：**仓鼠**（任务卡的「小芽」已作废）
 > 一句话：**让 B / C / D 不用找 A 要文件，全链路就能跑通**
 
 ---
@@ -17,8 +17,25 @@ A-module-frontend/index.html        ← 418 KB，自包含，双击即开，不�
 别直接改 index.html；改原型后跑一次 `python A-module-frontend/sync_frontend.py`）。
 
 **为什么是它而不是 Vue 工程**：五屏、仓鼠五态、缺口行、记忆墙、底部 dock 全在这个文件里，
-样式和动效都已定稿；`app/`（Vue）只是 13:30 为了对接 B 的接口、C 的 recognize.js 搭的**联调壳**，
-UI 是极简版，**不是演示门面**。两者不要混着看——这是之前"前端怎么长得不一样"的全部原因。
+样式和动效都已定稿；`app/dev.html`（Vue）只是 13:30 为了对接 B 的接口、C 的 recognize.js 搭的**联调壳**，
+UI 是极简版，**不是演示门面**。
+
+### 17:55 之后：`npm run dev` 打开的就是这一屏
+
+之前 `npm run dev` 打开的是极简联调壳，跟原型完全不是一个东西——这是"前端怎么长得不一样"的全部原因。
+现在工程里做了入口重排，两条路都留着：
+
+```
+app/
+├── index.html            ← npm run dev 的首页：跳转 → ./prototype.html（= 原型，418KB）
+├── dev.html              ← Vue 联调壳（原来的 index.html，接 B 的 /api/today、C 的 recognize.js）
+└── public/prototype.html ← 原型的副本，由 sync_frontend.py 生成，别手改
+```
+
+- **要看视觉 / 录屏 / 给评委看** → `npm run dev`，打开 `http://localhost:5173/` 就是原型那一屏
+- **要联调真后端** → 同一个服务，打开 `http://localhost:5173/dev.html`（右下角有「← 回到演示版」）
+- 端口固定在 **5173**（`strictPort`），因为 B 的 CORS 只放行 5173，别改
+- GitHub 上直接点 html 只能看源码；要变成能点开的链接，见下方「部署成链接」
 
 ### 信息架构（打开后看到的顺序）
 
@@ -39,9 +56,9 @@ UI 是极简版，**不是演示门面**。两者不要混着看——这是之�
 
 | 你要干什么 | 怎么做 |
 |---|---|
-| 看视觉 / 录屏 / 路演 | 双击 `A-module-frontend/index.html`（或浏览器拖进去） |
-| 部署成链接 | 把这个文件放到任意静态托管（GitHub Pages 的 branch 根目录即可，根 `index.html` 已做跳转） |
-| 跑真后端联调 | 见第五节，用 `app/` 那套；`index.html` 不连后端，它是演示门面 |
+| 看视觉 / 录屏 / 路演 | 双击 `A-module-frontend/index.html`（或浏览器拖进去）；或 `cd app && npm run dev` → `http://localhost:5173/`，**两者是同一屏** |
+| 部署成链接 | 把这个文件放到任意静态托管（GitHub Pages 的 branch 根目录即可，根 `index.html` 已做跳转）；`npm run build` 产物里 `dist/index.html` 也是同一个跳转 |
+| 跑真后端联调 | `npm run dev` 后开 `http://localhost:5173/dev.html`（Vue 壳，接 B 的 `/api/today`）；`index.html` / `prototype.html` 不连后端，它们是演示门面 |
 
 ---
 
@@ -50,11 +67,15 @@ UI 是极简版，**不是演示门面**。两者不要混着看——这是之�
 ```
 A-module-frontend/
 ├── index.html           ★ 前端入口（418KB 自包含原型，双击即开）
-├── sync_frontend.py     ★ 原型 → index.html 同步脚本
-├── app/                 Vue 联调壳（npm install && npm run dev）—— 不是演示门面
-│   ├── src/             App.vue、api.js、五屏组件、话术、仓鼠五态图
+├── sync_frontend.py     ★ 原型 → index.html + app/public/prototype.html 同步脚本
+├── app/                 Vue 工程：npm run dev 打开的是原型，dev.html 才是联调壳
+│   ├── index.html       ★ 只做跳转 → ./prototype.html（演示门面）
+│   ├── dev.html         ★ Vue 联调壳（接 B 的 /api/today、C 的 recognize.js）
+│   ├── vite.config.js   端口锁 5173 + 双入口（index.html / dev.html）
+│   ├── src/             App.vue、api.js、组件、话术、仓鼠五态图
 │   └── public/
-│       └── recognize.js C 的识别脚本（v1.1-r5）
+│       ├── prototype.html  原型的副本（sync_frontend.py 生成）
+│       └── recognize.js    C 的识别脚本（v1.1-r5）
 │
 ├── hamster-kit/         ★ 仓鼠五态素材，全队统一形象入口
 │   ├── hamster.css      五态切图 + 微动效 + 预加载
