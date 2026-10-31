@@ -1,6 +1,6 @@
 # A 模块 · 前端与视觉
 
-> 负责人：A（曹苏睿）｜ 2026-10-31 18:10 更新 ｜ 宠物形象：**仓鼠**（任务卡的「小芽」已作废）
+> 负责人：A（曹苏睿）｜ 2026-10-31 19:00 更新 ｜ 宠物形象：**仓鼠**（任务卡的「小芽」已作废）
 > 一句话：**让 B / C / D 不用找 A 要文件，全链路就能跑通**
 
 ---
@@ -10,7 +10,7 @@
 **看前端、录屏、给评委看，只用这一个文件**：
 
 ```
-A-module-frontend/index.html        ← 418 KB，自包含，双击即开，不需要 npm / 不需要后端
+A-module-frontend/index.html        ← 481 KB，自包含，双击即开，不需要 npm / 不需要后端
 ```
 
 它就是 `原型/仓鼠陪跑_原型_接真数据_单文件版.html` 的同步副本（`sync_frontend.py` 生成，
@@ -27,7 +27,7 @@ UI 是极简版，**不是演示门面**。
 
 ```
 app/
-├── index.html            ← npm run dev 的首页：跳转 → ./prototype.html（= 原型，418KB）
+├── index.html            ← npm run dev 的首页：跳转 → ./prototype.html（= 原型，481KB）
 ├── dev.html              ← Vue 联调壳（原来的 index.html，接 B 的 /api/today、C 的 recognize.js）
 └── public/prototype.html ← 原型的副本，由 sync_frontend.py 生成，别手改
 ```
@@ -45,12 +45,36 @@ app/
 | 2 | 记忆 `data-page="memory"` | 41 天前那句承诺 → 本周正确率 48% → 活力曲线（近 45 天，断签 2 次）→ 三条它注意到的事 | 内置演示数据 |
 | 3 | 档案 `data-page="archive"` | 开始日 / 有效天数 39 / 缺勤 8 / 最长连续 27 / 深夜 63 / 各模块 52%→71% | 内置演示数据 |
 | 4 | 出分日 `data-page="result"` | 想过放弃 3 次 / 还是坐下来 3 次 | 内置演示数据 |
-| 5 | 确认卡 / 兜底 | 上传真实截图 → 识别等待 → 确认卡（可改字段）→ 非学习图走兜底手填 | **C 的 r5 真识别**（内联） |
+| 5 | 确认卡 / 兜底 | 上传真实截图 → 识别等待 → 确认卡（可改字段）→ 非学习图走兜底手填 | **C 的 r6 真识别**（内联，SDK 已内嵌） |
 
 - 底部 dock 七格：演示路径 / 今日 / 传截图 / 回忆 / 出分日 / 实拍 / 切屏（后两个是演示辅助，路演时可只用前五个）
 - 仓鼠五态：`yuanqi 元气` / `tashi 踏实` / `pibei 疲惫` / `nianle 蔫了` / `xiumian 休眠`，
   五张 512 透明底 WebP 已 base64 内联在文件里，**离线也不会缺图**
-- 识别：C 的 `recognize.js v1.1-r5` 全文内联，上传真截图走真识别；识别服务连不上时降级到演示样本，不白屏
+- 识别：C 的 `recognize.js v1.1-r6` 全文内联（**SDK 已内嵌，不再依赖 jsdelivr**），上传真截图走真识别；识别服务连不上时降级到演示样本，不白屏
+
+### 19:00 · 识别升级到 C 的 r6（去掉了 CDN 单点）
+
+C 在 `main` 上把 `recognize.js` 升到 **v1.1-r6**（100,083 B）：**WorkBuddy SDK 已内嵌进文件末尾**，
+不再运行时去 `cdn.jsdelivr.net` 下载。原因是实测本机直连 jsdelivr 超时（只有走代理才通，且慢到 21.8s），
+而**浏览器不走系统代理** → r5 在浏览器里会加载 SDK 失败 → 识别整条挂、次次走兜底。
+
+A 侧已同步，改动三处（前端代码零改动）：
+
+| 文件 | 现在 |
+|---|---|
+| `A-module-frontend/index.html` | 481 KB，内联 **r6**（原 419 KB / r5） |
+| `A-module-frontend/app/public/prototype.html` | 同上，`sync_frontend.py` 的同步副本 |
+| `A-module-frontend/app/public/recognize.js` | r6，100,083 B |
+| `C-module-recognition/recognize.js`（分支内镜像） | r6，100,083 B |
+
+实测（`node batch-test.js`，**未加 `--use-env-proxy`**，即模拟浏览器不读代理的情形）：
+
+- `test5.jpg` → `excellent · 粉笔 · 2026-10-30 · 115分 · 135题 · 81%`，5.9s
+- `test9.jpg` → `normal · 21分 · 62题`，8.1s
+- `test4.jpg` → `low · 15题 · 93%`，3.0s（r5 时代无代理这里是 `环境初始化失败: fetch failed`）
+
+内联到单文件 HTML 时有一处坑：r6 文件头注释里有 `</script>`（用法示例），必须转义成 `<\/script`，
+否则脚本块被浏览器提前截断。已在 `_sync_r6.py` 里处理并做了 `node --check` 语法校验。
 
 ### 三种打开方式
 
@@ -66,7 +90,7 @@ app/
 
 ```
 A-module-frontend/
-├── index.html           ★ 前端入口（418KB 自包含原型，双击即开）
+├── index.html           ★ 前端入口（481KB 自包含原型，双击即开）
 ├── sync_frontend.py     ★ 原型 → index.html + app/public/prototype.html 同步脚本
 ├── app/                 Vue 工程：npm run dev 打开的是原型，dev.html 才是联调壳
 │   ├── index.html       ★ 只做跳转 → ./prototype.html（演示门面）
@@ -75,7 +99,7 @@ A-module-frontend/
 │   ├── src/             App.vue、api.js、组件、话术、仓鼠五态图
 │   └── public/
 │       ├── prototype.html  原型的副本（sync_frontend.py 生成）
-│       └── recognize.js    C 的识别脚本（v1.1-r5）
+│       └── recognize.js    C 的识别脚本（v1.1-r6，97KB）
 │
 ├── hamster-kit/         ★ 仓鼠五态素材，全队统一形象入口
 │   ├── hamster.css      五态切图 + 微动效 + 预加载

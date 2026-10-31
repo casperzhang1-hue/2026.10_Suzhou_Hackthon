@@ -4,28 +4,50 @@
 用法： python A-module-frontend/sync_frontend.py
 
 会写两份：
-  1) A-module-frontend/index.html        ← 双击 / 静态托管 / GitHub Pages 的入口
+  1) A-module-frontend/index.html                 ← 双击 / 静态托管 / GitHub Pages 的入口
   2) A-module-frontend/app/public/prototype.html  ← npm run dev 时 app/index.html 跳转到这里
 
 什么时候跑：改完 原型/仓鼠陪跑_原型_接真数据_单文件版.html 之后跑一次。
+
+注意：本仓库为了控制体积，只提交了生成物（index.html / prototype.html），
+原型源文件放在本地 `prototype/仓鼠陪跑_原型_接真数据_单文件版.html`，没有进 git。
+所以脚本会按下面的顺序找源文件，找不到就直接说明情况、不动任何文件。
 """
 import os
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, '原型', '仓鼠陪跑_原型_接真数据_单文件版.html')
+REPO = os.path.dirname(HERE)
+
+CANDIDATES = [
+    os.path.join(HERE, '原型', '仓鼠陪跑_原型_接真数据_单文件版.html'),
+    os.path.join(REPO, 'prototype', '仓鼠陪跑_原型_接真数据_单文件版.html'),
+]
+
 DSTS = [
     os.path.join(HERE, 'index.html'),
     os.path.join(HERE, 'app', 'public', 'prototype.html'),
 ]
 
 MARK = ('<!-- 自动生成，别直接改这个文件。\n'
-        '     源文件：A-module-frontend/原型/仓鼠陪跑_原型_接真数据_单文件版.html\n'
+        '     源文件：prototype/仓鼠陪跑_原型_接真数据_单文件版.html\n'
         '     改完源文件后跑：python A-module-frontend/sync_frontend.py -->\n')
+
+SRC = next((p for p in CANDIDATES if os.path.isfile(p)), None)
+if SRC is None:
+    print('没找到原型源文件，试过：')
+    for p in CANDIDATES:
+        print('  -', p)
+    print('\n本分支只提交了生成物，index.html 就是唯一真相；')
+    print('要改样式请改 index.html（或把源文件放回上面任一路径后再跑本脚本）。')
+    print('未改动任何文件。')
+    sys.exit(0)
 
 raw = open(SRC, encoding='utf-8').read()
 assert raw.startswith('<!doctype html>'), '源文件开头不是 <!doctype html>，先确认版本'
 out = raw.replace('<!doctype html>\n', '<!doctype html>\n' + MARK, 1)
 
+print('源文件：', SRC, len(raw), 'chars')
 for dst in DSTS:
     if not os.path.isdir(os.path.dirname(dst)):
         print('跳过（目录不存在）->', dst)
