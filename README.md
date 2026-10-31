@@ -248,9 +248,9 @@ python start_fullstack.py
 
 ---
 
-## 6. 给别人看（局域网 / 别的电脑）
+## 6. Demo（局域网 / 别的电脑）
 
-默认只监听 `127.0.0.1`，别人访问不到。要让同伴的电脑也能开：
+默认只监听 `127.0.0.1`：
 
 ```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
