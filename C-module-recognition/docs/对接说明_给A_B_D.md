@@ -1,7 +1,20 @@
 # C 模块对接说明（给 A / B / D）
 
-> 版本：v1.1-r5 ｜ 更新：2026-10-31 ｜ 维护：C（Nina）
+> 版本：**v1.1-r6**（2026-10-31 18:40）｜ 更新：2026-10-31 ｜ 维护：C（Nina）
 > 接口字段的**唯一权威定义**见同目录《接口草案_C模块_识别结果JSON_v1.1.md》，本文不重复字段表，只讲「你是谁、要用什么、注意什么」。
+
+## ⚠️ r6 必读（A 必须覆盖文件，否则现场可能识别全挂）
+
+`recognize.js` 已升级到 **r6**，**`main` 和 `nina_chen` 两个分支都是 r6**（同一个文件，97KB）。
+
+| | r5（旧） | r6（当前） |
+|---|---|---|
+| SDK 来源 | 运行时从 `cdn.jsdelivr.net` 下载 | **已内嵌进 recognize.js** |
+| 网络要求 | 必须能访问 jsdelivr，否则**识别完全不可用** | 无额外网络要求（CDN 仅作兜底） |
+| 文件大小 | 25KB | **97KB（正常，别以为是传错了）** |
+| 前端改动 | — | **零改动，覆盖文件即可** |
+
+**背景**：实测这台机器直连 jsdelivr 超时（只有走代理才通，且慢到 21.8s），浏览器不走代理 → SDK 加载失败 → 整条识别链路瘫痪、每次都走兜底。**现场网络同样有这个风险**，所以 r6 把 SDK 直接内嵌，消除这个单点依赖。
 
 ---
 
@@ -11,7 +24,7 @@
 
 | 物品 | 位置 | 用法 |
 |---|---|---|
-| `recognize.js` | `C-module-recognition/` | 覆盖 `app/public/recognize.js`，`<script>` 引入，前端代码零改动 |
+| `recognize.js` | `C-module-recognition/` | **r6**：覆盖 `app/public/recognize.js`，`<script>` 引入，前端代码零改动（文件 97KB 属正常） |
 | 调用方式 | — | `const r = await window.recognizeScreenshot(file, userId)` |
 | 标准测试图 | `C-module-recognition/test/` | 联调验收用，预期值见同目录《预期结果.md》 |
 
@@ -36,6 +49,7 @@ warnings=[] 或 [UNRECOGNIZED_APP]（source_app 偶尔读不出 Fb 角标，允�
 ### 已排除的风险
 
 - ✅ **CORS 不会被拦**（2026-10-31 实测：云服务网关统一回显 `Access-Control-Allow-Origin`，含 404 响应）
+- ✅ **r6 已消除 CDN 依赖**（SDK 内嵌，现场访问不了 jsdelivr 也能识别）
 - ✅ mock 问题的根因在 A 侧 `api.js` 的开关，与 C 无关，C 不动
 
 ---
