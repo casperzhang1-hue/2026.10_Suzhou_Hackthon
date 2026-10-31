@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import db, service
+from . import db, pet_chat as petchat, service
 from .schemas import RecordIn
 from .store import Store
 
@@ -66,6 +66,17 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
                 "modules": db.module_stats(store.db.conn),
                 "trend": db.daily_trend(store.db.conn, 7),
             }
+
+    @app.get("/api/pet/chat")
+    def pet_chat(intent: str = "today", user_id: str = "demo_zhang"):
+        """宠物开口：数字全部来自库，不生成事实。
+
+        intent ∈ today / weak / promise；未知意图返回反问，不硬答。
+        """
+        today = service.today_view(store.records, get_today())
+        with store.db.lock:
+            modules = db.module_stats(store.db.conn)
+        return petchat.reply(intent, today=today, modules=modules, memories=store.memories)
 
     return app
 

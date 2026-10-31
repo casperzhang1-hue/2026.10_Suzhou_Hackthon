@@ -229,7 +229,7 @@ b,strong{font-weight:600}
 .arch-row b{color:var(--ink);font-variant-numeric:tabular-nums}
 
 /* ---------- 宠物 SVG 动效 ---------- */
-.pet{width:100%;height:100%;display:block;filter:saturate(var(--sat,1));transition:filter 1s}
+.pet{width:100%;height:100%;display:block;filter:saturate(var(--sat,1));transition:filter 1s;transform-origin:50% 96%;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 .pet .g-body{transform:translateY(var(--slump,0px));transition:transform 1s cubic-bezier(.34,1.16,.4,1)}
 .pet .g-breathe{animation:breathe var(--breath,4.4s) ease-in-out infinite;transform-origin:130px 214px}
 @keyframes breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.012,.986)}}
@@ -251,6 +251,81 @@ b,strong{font-weight:600}
 @keyframes zzz{0%{opacity:0;transform:translate(0,4px)}40%{opacity:1}100%{opacity:0;transform:translate(6px,-8px)}}
 .pet .shells{opacity:var(--shells,0);transition:opacity .9s}
 .pet[data-view="back"] .face{opacity:0}
+/* ---- 宠物交互：手感参考 dsh-whale-widget ---- */
+/* 按压：底部锚定（origin 50% 96%），按下快压扁、松开带回弹超调 */
+.pet.press{transform:scale(calc(1 + .05*var(--amp,1)), calc(1 - .09*var(--amp,1)));transition:transform .09s ease-out}
+.pet.release{transform:none;transition:transform .42s cubic-bezier(.34,1.56,.64,1)}
+/* 摸头：挤压变形，保留 --slump 不丢五态下沉 */
+.pet .g-body.rua{animation:petRua .92s cubic-bezier(.34,1.28,.5,1)}
+@keyframes petRua{
+  0%{transform:translateY(var(--slump,0px)) scale(1)}
+  18%{transform:translateY(calc(var(--slump,0px) + 5px)) scale(1.07,.9)}
+  42%{transform:translateY(calc(var(--slump,0px) - 3px)) scale(.96,1.05)}
+  66%{transform:translateY(var(--slump,0px)) scale(1.03,.98)}
+  100%{transform:translateY(var(--slump,0px)) scale(1)}
+}
+/* 气泡：外壳先弹出，文字延迟 120ms 跟进（挂件的错峰手感） */
+.pet-bubble{position:absolute;left:50%;bottom:calc(100% - 34px);transform:translate(-50%,8px) scale(.82);transform-origin:50% 100%;opacity:0;pointer-events:none;transition:opacity .16s ease,transform .26s cubic-bezier(.34,1.42,.64,1);z-index:6;width:max-content;max-width:230px}
+.pet-bubble.on{opacity:1;transform:translate(-50%,0) scale(1)}
+.pet-bubble .bub{position:relative;background:#fff;border:1px solid rgba(44,74,140,.18);border-radius:14px;padding:9px 13px;font-size:13px;line-height:1.5;color:#2C3A52;box-shadow:0 6px 18px rgba(20,40,80,.12)}
+.pet-bubble .bub::after{content:'';position:absolute;left:50%;bottom:-6px;width:10px;height:10px;margin-left:-5px;background:#fff;border-right:1px solid rgba(44,74,140,.18);border-bottom:1px solid rgba(44,74,140,.18);transform:rotate(45deg)}
+.pet-bubble .txt{display:block;opacity:0;transform:translateY(3px);transition:opacity .16s ease .12s,transform .2s ease .12s}
+.pet-bubble.on .txt{opacity:1;transform:none}
+
+/* ---- 实拍皮肤也能摸头：没有 g-body，直接挤整只 ---- */
+.pet-photo.rua{animation:petRuaPhoto .92s cubic-bezier(.34,1.28,.5,1)}
+@keyframes petRuaPhoto{
+  0%{transform:none}
+  18%{transform:scale(1.06,.9)}
+  46%{transform:scale(.965,1.05)}
+  70%{transform:scale(1.02,.99)}
+  100%{transform:none}
+}
+
+/* ---- 「跟它说两句」面板（长按 800ms 唤出） ---- */
+.pchat{position:absolute;inset:0;z-index:80;pointer-events:none;overflow:hidden}
+.pchat.on{pointer-events:auto}
+.pchat-mask{position:absolute;inset:0;background:rgba(0,0,0,.44);opacity:0;transition:opacity .3s}
+.pchat.on .pchat-mask{opacity:1}
+.pchat-card{
+  position:absolute;left:0;right:0;bottom:0;
+  background:linear-gradient(180deg,#241B16,#1A1310);
+  border-radius:26px 26px 0 0;border-top:1px solid rgba(255,255,255,.07);
+  box-shadow:0 -22px 60px -12px rgba(0,0,0,.8);
+  padding:8px 20px 18px;transform:translateY(104%);
+  transition:transform .44s cubic-bezier(.22,1,.36,1);
+}
+.pchat.on .pchat-card{transform:translateY(0)}
+.pchat-handle{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.16);margin:0 auto 14px}
+.pchat-title{font-size:16px;font-weight:600;letter-spacing:.01em}
+.pchat-sub{font-size:12px;color:var(--ink3);margin:3px 0 12px}
+.pchat-log{max-height:168px;overflow:auto;display:flex;flex-direction:column;gap:9px;padding:2px 0 10px;scrollbar-width:none;-ms-overflow-style:none}
+.pchat-log::-webkit-scrollbar{display:none}
+.pchat-line{display:flex;flex-direction:column;max-width:87%}
+.pchat-line.me{align-self:flex-end;align-items:flex-end}
+.pchat-bub{
+  font-size:13.5px;line-height:1.55;padding:9px 13px;border-radius:14px;
+  background:rgba(255,255,255,.055);color:var(--ink);border:1px solid rgba(255,255,255,.05);
+}
+.pchat-line.me .pchat-bub{background:rgba(196,99,74,.18);border-color:rgba(196,99,74,.28);color:#F6DCCF}
+.pchat-meta{font-size:10.5px;color:var(--ink3);margin-top:4px;letter-spacing:.02em}
+.pchat-topics{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.pchat-topic{
+  font-size:12.5px;padding:8px 13px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.1);color:var(--ink2);
+  background:rgba(255,255,255,.03);transition:.18s;
+}
+.pchat-topic:active{background:rgba(196,99,74,.2);color:#F6DCCF}
+.pchat-topic:disabled{opacity:.45}
+.pchat-typing .pchat-bub{display:flex;gap:4px;align-items:center;padding:11px 14px}
+.pchat-typing i{width:5px;height:5px;border-radius:50%;background:var(--ink3);animation:pchatDot 1.1s ease-in-out infinite}
+.pchat-typing i:nth-child(2){animation-delay:.16s}
+.pchat-typing i:nth-child(3){animation-delay:.32s}
+@keyframes pchatDot{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-2px)}}
+.pchat-foot{display:flex;align-items:center;justify-content:space-between;padding-top:6px;border-top:1px solid var(--line)}
+.pchat-mute{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink3)}
+.pchat-mute input{accent-color:#C4634A;width:14px;height:14px}
+.pchat-close{font-size:12.5px;color:var(--ink3);padding:8px 4px}
 
 /* ---------- 宠物：实拍照片皮肤 ---------- */
 .pet-photo{position:relative;width:100%;height:100%;transform-origin:50% 100%}
@@ -874,8 +949,432 @@ homePet.innerHTML = petMarkup();
 resPet.innerHTML = petMarkup({back:true});
 devPet.innerHTML = petMarkup();
 
+/* =========================================================
+   2.5 宠物交互 + 开口（手感与话术机制迁自 dsh-whale-widget, MIT）
+
+   迁入 7 项：
+   ① 按压 Q 弹——底部锚定，按下 90ms 压扁、松开 420ms 回弹超调
+   ② 摸头 rua——连点 3 下挤压回弹
+   ③ 连点闹脾气——第 6 下转身（插画）/ 换蔫脸（实拍），并抱怨一句
+   ④ 长按 800ms 开口——把「逗它」和「跟它说话」分开，互不打扰
+   ⑤ 气泡错峰——外壳先出，文字延迟 120ms 跟进
+   ⑥ 加权随机 + 不连续重复；点击队列按序推进（对应鲸鱼的「点击序列」）
+   ⑦ 按压音效——素材同源，base64 内联，保持单文件自包含
+
+   刻意不迁 2 项（写在这里是为了说明「想过」，不是漏掉）：
+   · 拖拽 + 四边吸附：那是桌面悬浮层的能力。手机卡片里拖拽会跟页面滚动、
+     侧滑返回抢手势，宠物本身又受布局约束，迁过来只会变成 bug。
+   · 泡泡可视化编辑器：那是运营后台。用户不会去配置「我的宠物该说什么」，
+     真做了反而把角色变成可调参的挂件。
+
+   和鲸鱼最大的不同：这里的「AI」不做自由生成。三个话题的答案全部由
+   /api/pet/chat 用库里的真实数字拼（缺口、模块正确率、41 天前那句承诺），
+   连不上就明说连不上——现场被问「这 48% 哪来的」时能当场点开接口自证。
+   ========================================================= */
+
+/* ---------- ① 话术：按五态分组，带权重 ---------- */
+var PET_VOICE = {
+  vigour: [
+    {t:'今天很精神。你也是。', w:3},
+    {t:'你一来我就醒了。', w:2},
+    {t:'这周不欠账，我尾巴都翘起来了。', w:2}
+  ],
+  steady: [
+    {t:'我在呢，不着急。', w:3},
+    {t:'慢慢来，我看着。', w:2},
+    {t:'今天一般，但我们都好着。', w:2}
+  ],
+  tired: [
+    {t:'我有点撑。你也歇会儿吧。', w:3},
+    {t:'要不先停一下，明天还有时间。', w:2}
+  ],
+  wilt: [
+    {t:'我没力气了……不过你还在。', w:3},
+    {t:'今天就这样吧，好不好。', w:2}
+  ],
+  sleep: [
+    {t:'嘘，我睡了。', w:3},
+    {t:'……zZ', w:1}
+  ],
+  stay: [
+    {t:'我在。你忙你的。', w:3},
+    {t:'不回话也没关系，我就在这儿。', w:2}
+  ]
+};
+
+/* 长按之后它只负责「问」，不预设答案 */
+var PET_ASK = '想问什么？我这儿只有三件事说得清。';
+
+var PET_TOPICS = [
+  {k:'today',   label:'今天怎么样'},
+  {k:'weak',    label:'我哪里最毛'},
+  {k:'promise', label:'那个承诺'}
+];
+
+/* 后端不通时的兜底：不报任何数字。宁可少说，也不编 */
+var PET_FALLBACK = {
+  today:   '账本这会儿连不上，我只看见你刚记下了一条。',
+  weak:    '账本连不上，弱项我不敢瞎说。',
+  promise: '你说过的事我记着，等账本通了再跟你对一遍。'
+};
+
+/* 状态调制：越蔫反应越弱。同一个手势，别的时候一样，今天不一样 */
+function petAmp(svg){
+  return ({vigour:1, steady:1, tired:.72, wilt:.5, sleep:.3, stay:.8})[svg.dataset.state] || 1;
+}
+
+/* ---------- ⑥ 加权随机，且同一条不连着出两次 ---------- */
+var petLastLine = '';
+function pickLine(state){
+  var list = PET_VOICE[state] || PET_VOICE.steady;
+  var pool = list.filter(function(x){ return x.t !== petLastLine; });
+  if(!pool.length) pool = list;
+  var total = 0, i;
+  for(i = 0; i < pool.length; i++) total += (pool[i].w || 1);
+  var r = Math.random() * total;
+  for(i = 0; i < pool.length; i++){
+    r -= (pool[i].w || 1);
+    if(r <= 0){ petLastLine = pool[i].t; return pool[i].t; }
+  }
+  petLastLine = pool[pool.length - 1].t;
+  return petLastLine;
+}
+
+/* ---------- ⑦ 按压音效：默认开，可关，播放失败一律静默 ---------- */
+var PET_SFX = {
+  press:   'data:audio/mpeg;base64,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',
+  release: 'data:audio/mpeg;base64,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'
+};
+var petSfxOn = (localStorage.getItem('pet_sfx') !== 'off');
+var petSfxCache = {};
+function playSfx(kind){
+  if(!petSfxOn || !PET_SFX[kind]) return;
+  try{
+    var a = petSfxCache[kind] || (petSfxCache[kind] = new Audio(PET_SFX[kind]));
+    a.volume = 0.28;
+    a.currentTime = 0;
+    var p = a.play();
+    if(p && p.catch) p.catch(function(){});   /* 被自动播放策略拦下：不报错 */
+  }catch(e){ /* 无音频设备：静默 */ }
+}
+
+/* ---------- ④ 长按后的「聊两句」面板 ---------- */
+var petChatEls = null;
+
+function ensureChat(){
+  if(petChatEls) return petChatEls;
+  var host = $('#sheet') ? $('#sheet').parentNode : document.body;
+  var box = document.createElement('div');
+  box.className = 'pchat';
+  box.id = 'petChat';
+  box.innerHTML =
+    '<div class="pchat-mask" data-close="1"></div>' +
+    '<div class="pchat-card">' +
+      '<div class="pchat-handle"></div>' +
+      '<div class="pchat-title">跟它说两句</div>' +
+      '<div class="pchat-sub">它只说自己记得住的事</div>' +
+      '<div class="pchat-log" id="petChatLog"></div>' +
+      '<div class="pchat-topics" id="petChatTopics"></div>' +
+      '<div class="pchat-foot">' +
+        '<label class="pchat-mute"><input type="checkbox" id="petChatSfx">按压音效</label>' +
+        '<button class="pchat-close" id="petChatClose">收起</button>' +
+      '</div>' +
+    '</div>';
+  host.appendChild(box);
+
+  var log = $('.pchat-log', box);
+  var topics = $('.pchat-topics', box);
+
+  PET_TOPICS.forEach(function(t){
+    var b = document.createElement('button');
+    b.className = 'pchat-topic';
+    b.dataset.intent = t.k;
+    b.textContent = t.label;
+    b.onclick = function(){ petAsk(t.k, t.label); };
+    topics.appendChild(b);
+  });
+
+  var sfx = $('#petChatSfx');
+  if(sfx){
+    sfx.checked = petSfxOn;
+    sfx.onchange = function(){
+      petSfxOn = sfx.checked;
+      localStorage.setItem('pet_sfx', petSfxOn ? 'on' : 'off');
+    };
+  }
+
+  $('.pchat-mask', box).onclick = closeChat;
+  $('#petChatClose').onclick = closeChat;
+
+  petChatEls = {box: box, log: log, topics: topics};
+  return petChatEls;
+}
+
+function openChat(){
+  var el = ensureChat();
+  el.box.classList.add('on');
+  if(!$('.pchat-line', el.log)){
+    addChatLine('pet', PET_ASK);
+  }
+}
+
+function closeChat(){
+  if(petChatEls) petChatEls.box.classList.remove('on');
+}
+
+function addChatLine(who, text, meta){
+  var line = document.createElement('div');
+  line.className = 'pchat-line ' + who;
+  var body = document.createElement('div');
+  body.className = 'pchat-bub';
+  body.textContent = text;
+  line.appendChild(body);
+  if(meta){
+    var m = document.createElement('div');
+    m.className = 'pchat-meta';
+    m.textContent = meta;
+    line.appendChild(m);
+  }
+  petChatEls.log.appendChild(line);
+  petChatEls.log.scrollTop = petChatEls.log.scrollHeight;
+  return line;
+}
+
+function addTyping(){
+  var line = document.createElement('div');
+  line.className = 'pchat-line pet typing';
+  line.innerHTML = '<div class="pchat-bub"><i></i><i></i><i></i></div>';
+  petChatEls.log.appendChild(line);
+  petChatEls.log.scrollTop = petChatEls.log.scrollHeight;
+  return line;
+}
+
+/* 三个话题的唯一出口：2 秒超时就切模板，绝不让用户盯着空屏 */
+function petAsk(intent, label){
+  var el = ensureChat();
+  addChatLine('me', label);
+  var typing = addTyping();
+  var settled = false;
+  var timer = null;
+
+  function finish(text, meta){
+    if(settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if(typing && typing.parentNode) typing.parentNode.removeChild(typing);
+    addChatLine('pet', text, meta);
+    /* 面板外也让它开口，但长答案只截前半句——否则气泡会盖住整只仓鼠 */
+    if(petHomeAPI){
+      var brief = text.length > 30 ? text.slice(0, 30) + '……' : text;
+      petHomeAPI.say(brief, 4600);
+    }
+  }
+
+  function fallback(){ finish(PET_FALLBACK[intent] || '这个我说不清。'); }
+
+  if(!window.API || !API.online){ setTimeout(fallback, 420); return; }
+
+  timer = setTimeout(fallback, 2000);
+  fetch(API.base + '/api/pet/chat?intent=' + encodeURIComponent(intent) + '&user_id=demo_zhang',
+        {cache:'no-store'})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(d){
+      if(!d || !d.text){ fallback(); return; }
+      var meta = '来自 SQLite';
+      if(d.facts && d.facts.id) meta += ' · ' + d.facts.id;
+      else if(d.facts && d.facts.worst) meta += ' · ' + d.facts.worst;
+      finish(d.text, meta);
+    })
+    .catch(function(){ fallback(); });
+}
+
+/* ---------- ②③ 绑定手势 ---------- */
+var petHomeAPI = null;
+
+function petBind(slot){
+  var svg = $('.pet', slot);
+  if(!svg || svg.__bound) return null;
+  svg.__bound = true;
+
+  var isPhoto = svg.classList.contains('pet-photo');
+
+  var bubble = document.createElement('div');
+  bubble.className = 'pet-bubble';
+  bubble.innerHTML = '<div class="bub"><span class="txt"></span></div>';
+  slot.appendChild(bubble);
+  var txt = $('.txt', bubble);
+  var hideTimer = null;
+
+  function say(s, ms){
+    txt.textContent = s;
+    bubble.classList.add('on');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(function(){ bubble.classList.remove('on'); }, ms || 2600);
+  }
+
+  var taps = 0, tapTimer = null, downAt = 0, longFired = false, pressTimer = null, backTimer = null;
+  var queue = [], qi = 0;
+
+  function syncAmp(){ svg.style.setProperty('--amp', petAmp(svg)); }
+  syncAmp();
+
+  /* ⑥ 点击队列：每次普通点击往下推一条，推完从头来 */
+  function rebuildQueue(){
+    var state = svg.dataset.state || 'steady';
+    queue = PET_VOICE[state] || PET_VOICE.steady;
+    qi = 0;
+  }
+  function nextLine(){
+    if(!queue.length) rebuildQueue();
+    var line = queue[qi % queue.length].t;
+    qi++;
+    if(qi >= queue.length){ qi = 0; petLastLine = line; }
+    else petLastLine = line;
+    return line;
+  }
+
+  function press(){ svg.classList.remove('release'); svg.classList.add('press'); playSfx('press'); }
+  function release(){
+    svg.classList.remove('press');
+    svg.classList.add('release');
+    playSfx('release');
+    setTimeout(function(){ svg.classList.remove('release'); }, 460);
+  }
+
+  /* ② 摸头：插画挤 g-body，实拍没有 g-body，就直接挤整只 */
+  function rua(){
+    var target = $('.g-body', svg) || svg;
+    target.classList.remove('rua');
+    target.getBoundingClientRect();          /* 强制重排，连点也能重播动画 */
+    target.classList.add('rua');
+    setTimeout(function(){ target.classList.remove('rua'); }, 950);
+  }
+
+  function flipTo(view){
+    svg.style.transition = 'transform .15s ease-in';
+    svg.style.transform = 'scaleX(0)';
+    setTimeout(function(){
+      svg.dataset.view = view;
+      svg.style.transition = 'transform .26s cubic-bezier(.34,1.42,.64,1)';
+      svg.style.transform = '';
+      setTimeout(function(){ svg.style.transition = ''; }, 300);
+    }, 155);
+  }
+
+  /* ③ 闹脾气：蔫了连脾气都没有 */
+  function turnBack(){
+    if(petAmp(svg) < .5){ say('……不想动。'); return; }
+    if(isPhoto){
+      applyPet(svg, 'wilt');
+      say('再戳我要生气了。');
+      clearTimeout(backTimer);
+      backTimer = setTimeout(function(){ applyPet(svg, APP.state || 'steady'); }, 2800);
+    } else {
+      flipTo('back');
+      say('再戳我要生气了。');
+      clearTimeout(backTimer);
+      backTimer = setTimeout(function(){ flipTo('front'); }, 2800);
+    }
+  }
+
+  function onTap(){
+    taps++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(function(){ taps = 0; }, 900);
+    if(taps >= 6){ taps = 0; turnBack(); return; }
+    if(taps === 3){ rua(); say('嗯……再摸一下。', 1800); return; }
+    say(nextLine(), 2200);
+  }
+
+  slot.addEventListener('pointerdown', function(e){
+    if(e.button && e.button !== 0) return;
+    downAt = Date.now();
+    longFired = false;
+    syncAmp();
+    press();
+    clearTimeout(pressTimer);
+    /* ④ 长按 800ms：开口，而不是继续挠它 */
+    pressTimer = setTimeout(function(){
+      longFired = true;
+      say(PET_ASK, 2600);
+      openChat();
+    }, 800);
+  });
+
+  slot.addEventListener('pointerup', function(){
+    clearTimeout(pressTimer);
+    release();
+    if(!longFired && Date.now() - downAt < 600) onTap();
+    longFired = false;
+  });
+
+  slot.addEventListener('pointercancel', function(){
+    clearTimeout(pressTimer);
+    release();
+    longFired = false;
+  });
+
+  /* 长按在移动端会触发系统菜单，这里挡掉 */
+  slot.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  rebuildQueue();
+  return {
+    say: say,
+    refresh: function(){ syncAmp(); rebuildQueue(); },   /* 五态变了，话术与幅度一起换 */
+    rebuild: rebuildQueue
+  };
+}
+
+petHomeAPI = petBind(homePet);
+
+/* 主动开口：一天最多 2 次。超过就是骚扰，情绪价值会变成负的 */
+function petProactive(){
+  if(!petHomeAPI) return;
+  var key = 'pet_proactive_' + new Date().toDateString();
+  var used = parseInt(sessionStorage.getItem(key) || '0', 10);
+  if(used >= 2) return;
+  sessionStorage.setItem(key, String(used + 1));
+  setTimeout(function(){
+    var promise = pickPromise();
+    if(promise && !sessionStorage.getItem('pet_promise_said')){
+      sessionStorage.setItem('pet_promise_said', '1');
+      petHomeAPI.say(promise, 5600);
+      return;
+    }
+    if(APP.gap >= 3){ petHomeAPI.say('这周欠 ' + APP.gap + ' 次了。先砍一项，别硬补。', 4600); return; }
+    petHomeAPI.say(pickLine(APP.state), 4200);
+  }, 1200);
+}
+
+/* 「它记得」：只在本周真的比当时差的时候才提。
+   没有落差就不提——否则就是拿旧话吓人，情绪价值反成负担 */
+function pickPromise(){
+  var list = window.PET_MEMORY || [];
+  for(var i = 0; i < list.length; i++){
+    var m = list[i];
+    if(m.type !== 'promise') continue;
+    if(typeof m.then_accuracy !== 'number' || typeof m.week_accuracy !== 'number') continue;
+    if(m.week_accuracy >= m.then_accuracy) continue;
+    return m.days_ago + ' 天前你说「' + m.quote + '」，那时候 ' +
+           Math.round(m.then_accuracy * 100) + '%，这周 ' + Math.round(m.week_accuracy * 100) + '%。';
+  }
+  return null;
+}
+
+/* 入库成功后的回话：数字取自刚提交的那条记录，不是编的 */
+function petAfterSave(rec){
+  if(!petHomeAPI || !rec) return;
+  var t = '记下了';
+  if(rec.duration_minutes) t += '，' + rec.duration_minutes + ' 分钟';
+  if(rec.accuracy) t += '，' + Math.round(rec.accuracy * 100) + '%';
+  t += '。';
+  t += (APP.gap > 0) ? ('这周还欠 ' + APP.gap + ' 次。') : '这周清了。';
+  petHomeAPI.say(t, 4600);
+}
+
 function renderHome(){
   applyPet($('.pet', homePet), APP.state);
+  if(petHomeAPI) petHomeAPI.refresh();   /* 状态变了，反应幅度跟着变 */
   $('#stateWord').textContent = STATE_TEXT[APP.state].word;
   $('#stateLine').textContent = STATE_TEXT[APP.state].line;
   $('#gapCount').textContent = APP.gap;
@@ -1348,7 +1847,13 @@ function applyServerToday(t){
 function syncFromServer(){
   if(!API.online) return Promise.resolve(null);
   return apiGet('/api/today?user_id=demo_zhang')
-    .then(function(t){ applyServerToday(t); return t; })
+    .then(function(t){
+      applyServerToday(t);
+      /* 顺手取记忆：取不到不影响今日状态，只是它少记一件事 */
+      return apiGet('/api/memories')
+        .then(function(m){ window.PET_MEMORY = (m && m.items) || []; return t; })
+        .catch(function(){ window.PET_MEMORY = window.PET_MEMORY || []; return t; });
+    })
     .catch(function(e){ console.warn('[后端] 读取失败，回落本地状态', e); return null; });
 }
 
@@ -1404,7 +1909,10 @@ function postRecordAndRefresh(p){
     console.log('[入库] 已写入 SQLite ' + res.record_id, body);
     if(API.info) API.info.records = (API.info.records || 0) + 1;
     showDbBadge('SQLite 已连接 · ' + (API.info ? API.info.records : '?') + ' 条记录 · 刚记下');
-    return syncFromServer();
+    return syncFromServer().then(function(){
+      petAfterSave(body.record);   /* 入库成功它才开口，数字取自这条记录 */
+      return null;
+    });
   }).catch(function(e){
     console.warn('[入库] 失败，保留本地状态：' + e.message);
   });
@@ -1414,7 +1922,7 @@ function postRecordAndRefresh(p){
 probeBackend().then(function(ok){
   if(ok) return syncFromServer();
   console.log('[后端] 未连接，使用本地演示数据（离线可演）');
-});
+}).then(function(){ petProactive(); });
 
 /* tabs */
 $$('#tabs button').forEach(function(b){
