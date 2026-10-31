@@ -13,13 +13,15 @@
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 
 import pytest
 
 from app import pet_persona as P
 
 TODAY = {
-    "date": "2026-10-31",
+    # 距今 9 天：既避开「今天」的口径，也留出余量，改天再跑这批用例也不会飘
+    "date": (date.today() + timedelta(days=9)).isoformat(),
     "has_record": True,
     "user_state": "稳",
     "gap": {"week_target": 5, "week_done": 4, "owed": 1},

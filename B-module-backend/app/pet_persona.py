@@ -430,7 +430,8 @@ def _numbers(today: dict, modules: list[dict]) -> dict:
 
 
 def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text: str,
-                uploads: list[dict] | None = None) -> dict:
+                uploads: list[dict] | None = None,
+                history: list[dict] | None = None) -> dict:
     """闲聊用的事实包：比 pet_brain 的意图包更宽，但同样每个数字都带口径。
 
     三条分支的优先级是刻意排的：**判断 > 安慰 > 平常**。
@@ -442,11 +443,26 @@ def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text:
       仍然会念「资料分析 955 题、今天 130 分钟」，重试一次也照念。与其在输出端追着拦，
       不如输入端不给：没有数字可念，它就只能说人话。
     - ``provenance``：他问「你怎么知道」。只给出处，不安慰，也不报账。
+
+    - ``recap``：他问「我们刚才说了什么」。这是**唯一**会拿到它自己原话的一支：
+      别的分支刻意不给它的回答（给了它就会整句照抄），而这一支的任务本来就是复述，
+      所以必须给，而且要原样给。
+    - ``solution``：他难受 + 明确要办法。和 ``comfort`` 分开，因为这两件事的答法相反——
+      要人陪的时候给建议是把安慰说成了任务，要办法的时候只给陪伴是把问题晾在那儿。
     """
     recalled = recall(text, memories, modules)
     pet_state = (today or {}).get("user_state")
     sources = _sources(today, uploads, recalled)
     sad = looks_sad(text)
+
+    # ⓪ 他在问「刚才聊到哪了」。排在最前面：这一句里既没有名字、也没有情绪，
+    # 落到别的任何一支都是错答，而错答的形态就是报账本。
+    if _asks_recap(text):
+        return {
+            "mode": "recap",
+            "pet_state": pet_state,
+            "recent": _recap_view(history),
+        }
 
     # ⓪ 他在问名字。这一支必须排在最前面：名字不是账，也不是情绪，
     # 混进任何一支都会被答成别的——「你该叫我什么」被答成「你叫我团团」就是这么来的。
@@ -491,7 +507,40 @@ def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text:
             facts["sources"] = sources
         return facts
 
-    # ② 他难受
+    # ② 他难受，**而且**在问「那我该怎么办」
+    # 这一支是从 comfort 里拆出来的。拆之前「有什么办法让我不累呢」被判进 comfort，
+    # 而 comfort 的指令明写着「不要给办法」——于是它答「你累啦？我趴你手边歇会儿」。
+    # 他要的是办法，它给的是陪伴，两个都对，但答的不是同一件事。
+    # 这批 tips 是通用的、不碰他自己账本的：一个数字都没有，所以永远不算编。
+    # 判「他要办法」时不能只看这一句。「有什么办法让我不累呢」里的「不累」
+    # 会被否认句规则剥掉（那条规则是给「我不累啊」准备的），于是 sad=False，
+    # 整句落进 normal，变成一句泛泛的鼓励。所以放宽成「提到了压力词」。
+    #
+    # 还要看**他刚说过什么**：他先说了「我今天模考又崩了」，紧接着问「我现在该怎么办」，
+    # 这一句里一个情绪词都没有，可上下文明摆着在求助。只看单句就会答成闲聊。
+    # 情绪是有延续性的，这正是「像认识你」和「一问一答」的差别。
+    said_before = " ".join(
+        (t.get("content") or "") for t in (history or [])
+        if t.get("role") == "user"
+    )[-200:]
+    stressed = (sad
+                or any(w in (text or "") for w in _SOFT_WORDS)
+                or any(w in said_before for w in _SOFT_WORDS))
+    if stressed and _asks_solution(text) and not _asks_for_data(text):
+        return {
+            "mode": "solution",
+            "pet_state": pet_state,
+            "tips": [
+                "先离开桌子走一圈，让眼睛歇一会儿",
+                "把手机放到看不见的地方，回来只做最熟的那几道",
+                "洗把脸，回来只翻上次做错的那几道",
+            ],
+            # 刻意不给 memories。实测给它旧事，它就拿那句当主体念：
+            # 问「有什么办法提神」，答的是「你刚说模考崩了」——又把问题晾回去了。
+            # 他要的是下一步做什么，不是被复述一遍处境。
+        }
+
+    # ②' 他难受，只想被陪一会儿
     if sad and not _asks_for_data(text):
         return {
             "mode": "comfort",
@@ -499,8 +548,14 @@ def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text:
             # 只留原话和「谁说的」，不留 days_ago / 正确率——「41 天前」也是账本口气。
             # 也不放 sources：他难受的时候翻截图当证据，是把安慰说成了汇报。
             # 只给一件：三件旧事一起上，它就会挨个念一遍，像在念稿。
-            "memories": [{"who": pet_memory.view(m)["who"], "text": m.get("quote")}
-                         for m in recalled[:1]],
+            #
+            # ``who`` 必须是「他」。实测放旁白进去会出这种事：seed 里那句
+            # 「断了一天，第二天就回来了」是我们记的账，模型读成了他自己做过的事，
+            # 张口就是「你刚断了一天，第二天就回来了呢」——听着贴心，但他没断过，
+            # 当场就能拆穿。旁白不是他的话，安慰他的时候尤其不能借旁白充数。
+            "memories": [{"who": "他", "text": m.get("quote")}
+                         for m in recalled[:2]
+                         if pet_memory.view(m)["who"] == "他"][:1],
         }
 
     # ③ 他在问账：今天多少分钟、哪块最毛。
@@ -609,6 +664,10 @@ def _intent_key(text: str) -> str:
         return "capability"
     if any(w in t for w in _RELATION_ASK):
         return "relation"
+    # 「有什么办法」和「再给我出个主意」是同一件事的两种说法。
+    # 分不出它们，第二遍就进不了"换一条"的分支——它会把第一条建议再说一遍。
+    if _asks_solution(t):
+        return "solution"
     if _asks_advice(t):
         return "advice"
     account = _asks_account(t)
@@ -638,15 +697,44 @@ def split_recent_replies(history: list[dict] | None, text: str) -> tuple[list[st
     other: list[str] = []
     same: list[str] = []
     asked = ""
-    mine = _intent_key(text)
     for turn in (history or []):
         role = turn.get("role")
         content = (turn.get("content") or "").strip()
         if role == "user":
             asked = content
         elif role == "assistant" and content:
-            (same if _intent_key(asked) == mine else other).append(content)
+            (same if _same_topic(asked, text) else other).append(content)
     return other[-3:], same[-2:]
+
+
+def _same_topic(a: str, b: str) -> bool:
+    """两句话是不是同一件事。
+
+    ``_intent_key`` 有个笼统的 normal 档，什么都没命中的话都往里落。
+    于是「我妈又催我报班了」和「模考又崩了」被判成同一件事——
+    后果是它拿上一轮答模考的那句当反面样本，去答一句全新的话：
+    既被要求"不许用上一遍的开头"，又被要求"换个结构"，
+    答一句本来很自然的话被搅得七扭八歪。normal 档必须再看有没有共同的话题词。
+    """
+    ka, kb = _intent_key(a), _intent_key(b)
+    if ka != kb:
+        return False
+    if ka != "normal":
+        return True
+    a, b = (a or "").strip(), (b or "").strip()
+    if not a or not b:
+        return False
+    if set(_core_words(a, limit=8)) & set(_core_words(b, limit=8)):
+        return True
+    # 短追问（「那资料分析呢」）抽不出成对的词，退回字面重合。
+    # 按单字算太容易撞——「又」「了」这种字几乎每句都有，两句不相关的话也能撞出两个字。
+    # 所以看相邻两字的组合：连着两个字一样，才像是同一件事。
+    return bool(_bigrams(a) & _bigrams(b))
+
+
+def _bigrams(text: str) -> set[str]:
+    return {text[i:i + 2] for i in range(len(text) - 1)
+            if "\u4e00" <= text[i] <= "\u9fa5" and "\u4e00" <= text[i + 1] <= "\u9fa5"}
 
 
 # ---------- 他在问账：今天多少、哪块最毛 ----------
@@ -692,6 +780,46 @@ _DONT_KNOW = ("不知道", "不记得", "没记住", "没告诉我", "还没说"
 # 这两类以前都落在 normal 模式，事实包跟问题一点关系都没有，
 # 模型只好拿最近的素材硬凑——问「你能干什么」，它答「我帮你把瓜子藏进腮帮子啦」；
 # 问「你喜欢我吗」，它答「我把你的瓜子藏了三天」。都是答非所问，而且是编的。
+# 他在问「我们刚才聊到哪了」。
+#
+# 这一类以前压根不存在：七个判定一个都不命中，于是掉进 normal，
+# 而 normal 给的是账本 + 三条旧事 + 截图，没有主次——模型挑最具体的念，
+# 于是「那我们刚刚说了什么」被答成「你刚传的图里，23 分钟做了 15 题对 9 题」。
+# 它没糊弄人，它真的不知道刚才聊了什么：它的历史里只有他的提问，
+# 没有自己的回答（见 build_messages 的注释）。所以这一类必须单独开一支，
+# 把最近几轮真实对话**原样**交给它复述。
+_RECAP_ASK = ("刚才说", "刚刚说", "刚才聊", "刚刚聊", "说了什么", "说了啥",
+              "聊了什么", "聊了啥", "聊到哪", "说到哪", "讲到哪",
+              "上一句", "上句", "前面说", "之前说", "刚说", "复述", "回顾一下",
+              # 「你再讲一遍刚才那事」也是要它复述。早先没收这几种说法，
+              # 整句掉进 normal，而 normal 给的是账本，于是它把上一句的判断又念了一遍——
+              # 界面上看就是同一个人重复同一句。
+              "再说一遍", "再讲一遍", "再说一次", "讲一遍", "重说", "重复一遍",
+              "刚才那", "刚那事", "刚说到")
+# 「我刚才学了多久」也含「刚才」，但问的是账不是话。词表分开，别让它抢了数据模式。
+_RECAP_NOT_ASK = ("多久", "多长时间", "多少分钟", "几道", "几题", "正确率",
+                  "做了什么", "学了什么")
+
+# 他难受，但他要的不是安慰，是「那我该怎么办」。
+# 这两件事以前都被判进 comfort，而 comfort 的指令里明写着「不要给办法」——
+# 于是一句「有什么办法让我不累呢」得到的是「你累啦？我趴你手边歇会儿」。
+# 他要办法，它给陪伴，两个都对，但答的不是同一件事。
+_SOLUTION_ASK = ("办法", "方法", "怎么办", "咋办", "怎么才能", "怎样才", "怎么样才能",
+                 "有什么招", "给点建议", "点建议", "有什么建议", "建议我", "怎么缓解",
+                 "怎么调整", "怎么改善", "帮帮我", "怎么做才好",
+                 # 「出主意」这类说法原先一个都没收：他要办法时说「给我出个主意」，
+                 # 判定不命中就掉回 normal，于是又变成陪伴——他要的还是办法。
+                 "出个主意", "出主意", "出个点子", "给个主意", "想个办法", "换个办法",
+                 "别的办法", "还有别的吗", "还有吗", "再来一个", "再给", "再支个招",
+                 "支个招", "有什么招", "教教我")
+
+# 这两类的回答必须落在「真答了那件事」上，不能拿小动作凑数。
+# 动作词刻意不收「歇」和「可以」：comfort 的标准答案就是「我趴你手边歇会儿」，
+# 把「歇」算成给了办法，这道闸就等于没装。要的是「做点什么」，不是「歇着」。
+_RECAP_ANSWER = ("刚才", "刚刚", "上句", "前面", "你说", "聊", "说")
+_SOLUTION_ANSWER = ("试试", "先", "把", "去", "做", "喝", "走", "放", "停",
+                    "闭眼", "起身", "换", "挑")
+
 _CAP_ASK = ("你能干什么", "你会干什么", "你会什么", "你能做什么", "能帮我什么",
             "你能帮我", "你有什么用", "你能干嘛", "你都会啥", "你的功能")
 _RELATION_ASK = ("你喜欢我吗", "你喜欢我么", "你在乎我吗", "你讨厌我吗", "你爱我吗",
@@ -710,7 +838,102 @@ _REPEAT_ANGLE = {
     "capability": "上一遍先说看截图那件，这次先说「记住你说过的话」，再说另一件。",
     "address": "上一遍直接叫了名字，这次先说一句「我记着呢」，再把名字带上。",
     "identity": "上一遍只报了名字，这次加一句你在陪他。",
+    # solution 连着要主意时，它会每一条都从「你累啦」开头——
+    # 三条建议看着像同一句套了三个尾巴。所以第二遍起不许再认一遍累，直接给做法，
+    # 而且要挑和上一遍**不同**的那条（facts.tips 里有三条，别抓着第一条不放）。
+    "solution": "上一遍你先认了一句他累，再从 tips 里挑一条。这次不许再认累——"
+                "直接从做法说起（「把手机放到看不见的地方……」），"
+                "并且挑一条和上一遍不同的。",
+    # recap 放行了复读闸（复述自己的旧话必然会撞上），所以换法只能靠这里：
+    # 不给换法，连问两遍就是两条一模一样的泡泡——那正是用户最开始骂的那个毛病。
+    "recap": "上一遍你把最近一轮说全了。这次换个开头：先一句话概括你们在聊哪件事"
+             "（「你在说模考崩了那件事」），再说你当时是怎么回的。"
+             "不许用上一遍开头那几个字，也不许整句搬过来。",
 }
+
+
+def _asks_recap(text: str) -> bool:
+    """他是不是在问「我们刚才说了什么」。"""
+    t = text or ""
+    if not any(w in t for w in _RECAP_ASK):
+        return False
+    # 「我刚才学了多久」「我今天做了什么」是在问账，不是问话
+    if any(w in t for w in _RECAP_NOT_ASK):
+        return False
+    return True
+
+
+def _asks_solution(text: str) -> bool:
+    """他是不是在要一个办法（而不只是想要人陪）。"""
+    return any(w in (text or "") for w in _SOLUTION_ASK)
+
+
+def _borrowed(text: str, avoid: list[str] | None, *, size: int = 14) -> str:
+    """它是不是把自己上一句里的一大段原封不动搬过来了。
+
+    字符重合率判不出来这种：第 N 遍复述时在旧话前面加半句、后面补半句，
+    重合率掉到 0.7，但中间那 20 个字是一个字没改的——界面上看着还是同一句。
+    所以这里不看比例，看**连续子串**：旧话里任意一段够长的原文出现在新话里，
+    就是搬的。只有 recap 用得上（别的模式有 0.84 那道已足够，怕误杀）。
+    """
+    new = _bare(text or "")
+    if len(new) < size:
+        return ""
+    for old in (avoid or []):
+        src = _bare(old or "")
+        for i in range(0, max(0, len(src) - size + 1), 4):
+            chunk = src[i:i + size]
+            if len(chunk) >= size and chunk in new:
+                return chunk
+    return ""
+
+
+def _recap_view(history: list[dict] | None, *, turns: int = 2) -> list[dict]:
+    """把最近几轮对话还原成「谁说了什么」，给他复述用。
+
+    只取 user / assistant 两种角色，别的一律跳过（系统消息不是对话）。
+    截 80 字：复述不是朗诵，长了它会想整段念出来。
+
+    ``turns`` 只留两轮。给三轮实测会散：六条里它随手挑一条念，
+    挑中的往往是中间那句，听起来像没听懂「刚才」是最近那一轮。
+
+    末尾要**跳过它正在问的这件事本身**。他连着问「刚才说了什么」时，历史里
+    最近的对话就是前几遍的问句和前几遍的复述——照着这些复述，等于用答案答答案
+    （实测第三遍的输出里，一大半是第二遍原样搬过来的）。
+    """
+    items: list[dict] = []
+    for turn in (history or []):
+        role, content = turn.get("role"), (turn.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "user":
+            who = "他"
+        elif role == "assistant":
+            who = "我"
+        else:
+            continue
+        text = content[:80]
+        # 同一句连着出现两次（他连点两下、或上一轮的回答被重试覆盖），
+        # 只留一条，否则复述出来像卡带
+        if items and items[-1]["who"] == who and items[-1]["text"] == text:
+            continue
+        items.append({"who": who, "text": text})
+
+    # 从末尾往前，把「他在问刚才说了什么」以及当时给出的复述整段摘掉。
+    # 不摘的话，第二遍复述的是第一遍的复述，第三遍复述第二遍——越问越空。
+    while items:
+        last = items[-1]
+        if last["who"] == "他" and _asks_recap(last["text"]):
+            items.pop()
+            continue
+        if last["who"] == "我":
+            prev = items[-2] if len(items) >= 2 else None
+            if prev and prev["who"] == "他" and _asks_recap(prev["text"]):
+                items.pop()
+                items.pop()
+                continue
+        break
+    return items[-turns * 2:]
 
 
 def _which_name(text: str) -> str:
@@ -720,6 +943,14 @@ def _which_name(text: str) -> str:
     if any(w in t for w in _NAME_ASK):
         return "mine"
     if any(w.lower() in t.lower() for w in _IDENTITY_ASK):
+        return "yours"
+    # 「我到底叫什么来着」「我叫啥来着」——中间一插字，词表里一条都对不上，
+    # 于是掉进 normal，被答成「瓜子刚剥好，你接着讲」：问名字答成递瓜子。
+    # 所以按「谁 + 叫什么」的先后位置判方向，别再往词表里堆说法了——
+    # 堆不完的，他能插的字有几十种。
+    if re.search(r"我[^你]{0,8}?(叫什么|叫啥|名字是|名字叫)", t):
+        return "mine"
+    if re.search(r"你[^我]{0,8}?(叫什么|叫啥|名字是|名字叫)", t):
         return "yours"
     return ""
 
@@ -839,12 +1070,19 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
     # 抄自己上一句。这句不假，但等于没答——所以单独拦，让它重说。
     # 两种情形要分开说：换了问题还回同一句（答非所问）和同一件事重复问
     # 又逐字照抄。后者不能照前者的改法改——它得留着那笔账，只换说法。
+    #
+    # 这道闸 recap 也要过：他换个问法（「刚才聊到哪了」）而它原样重播，
+    # 正是用户最开始截图骂的那个毛病。实测真出过——放行之后两次回答一模一样。
     dup = repeated(text, avoid)
     if dup:
         return False, f"复读了刚才那句「{dup[:24]}」，一个字都没答他"
-    dup = repeated(text, avoid_same, ratio=0.95, prefix=False)
-    if dup:
-        return False, f"又把刚才那句原样说了一遍「{dup[:24]}」"
+    # 但「同一个问题问两遍」这道要放行：recap 答的就是「我刚才说了什么」，
+    # 复述自己的旧话必然和上一遍重合，在这里拦等于把正确答案判成错的。
+    # 换法交给 _REPEAT_ANGLE["recap"]——它换的是切入角度，不是内容。
+    if facts.get("mode") != "recap":
+        dup = repeated(text, avoid_same, ratio=0.95, prefix=False)
+        if dup:
+            return False, f"又把刚才那句原样说了一遍「{dup[:24]}」"
 
     # 他在问该不该学，回答里必须有一个结论。
     # 没有这道闸，「所以我今天就不用学习了吗」会被答成「我帮你剥了颗瓜子」——
@@ -940,6 +1178,37 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
             if "团团" not in text and "仓鼠" not in text:
                 return False, "他问你是谁，你没说出自己的名字"
 
+    # 他在问「刚才说了什么」。这一支最典型的错答是**报账**——
+    # 原实现把「那我们刚刚说了什么」答成「你刚传的图里，23 分钟做了 15 题对 9 题」：
+    # 每个数都是真的，但一个字都没回答他问的那件事。
+    if facts.get("mode") == "recap":
+        if not any(w in text for w in _RECAP_ANSWER):
+            return False, "他问刚才说了什么，你一句都没复述"
+        if not (facts.get("recent") or []) and re.search(r"\d", text):
+            return False, "刚才没聊几句，你却报出一串数"
+        # 复述可以换角度，但不能一个字都不改地重播上一遍。
+        # 换不换问法都要管：问法没变时上一句落在 avoid_same（上面那道放行了），
+        # 问法变了落在 avoid（84% 就拦）。这里补一道只认逐字重复的，
+        # 因为复述的内容本来就该相似，松一点就会误杀真的复述。
+        dup = repeated(text, avoid_same, ratio=0.98, prefix=False)
+        if dup:
+            return False, f"复述跟刚才那句几乎一样「{dup[:16]}」，换个说法"
+        # 比例判不出来这一种：在自己的旧话前面加半句、后面补半句。
+        # 实测第三遍的输出里，整整 20 个字是从上一次的回答里一个不差搬过来的。
+        chunk = _borrowed(text, avoid_same or avoid)
+        if chunk:
+            return False, f"把刚才那句里的「{chunk[:14]}」整段搬过来了，自己组织话说"
+
+    # 他要的是办法。回一句「我趴你手边陪你」是把问题晾在那儿——
+    # 听着温柔，但他问的是「怎么办」，答的是「我在」。
+    if facts.get("mode") == "solution":
+        if not any(w in text for w in _SOLUTION_ANSWER):
+            return False, "他在问怎么办，你只给了陪伴，没给办法"
+        # 复述处境也是同一种「没答」：他知道自己有多惨，不用再听一遍。
+        # 历史里写着「他更早说过：模考又崩了」，模型很容易拿它当开场。
+        if re.search(r"你刚说|你刚才说|你说过", text):
+            return False, "他在问怎么办，你却把他的处境复述了一遍"
+
     # 他在问今天的账，却把账安到他嘴上：「82 分钟，你自己跟我说的」——
     # 那数是从记录里算的，他没说过。这类出处错位比报错数更伤信任，
     # 因为他会想「我什么时候说过」。
@@ -984,17 +1253,26 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
     # 出处摘要里也带数（「判断推理 15 题对 9 题」），那些同样是他给过我的
     for src in (facts.get("sources") or []):
         allowed |= {int(n) for n in re.findall(r"\d+", str(src.get("what") or ""))}
+    # 复述他的话时，话里的数（「我今天做了 60 道」）是他自己说过的，不算编。
+    # 不加这一段，recap 只要引到原话里的数字就会被判成编造，然后掉兜底。
+    for r in (facts.get("recent") or []):
+        allowed |= {int(n) for n in re.findall(r"\d+", str(r.get("text") or ""))}
 
     # 中文写法的数量：换算成数再判。库里真有这个数就放行（「六成」= 60%，
     # 事实里就是 60），换算完对不上才拦（「十三分钟」对不上 130 分钟）。
-    cn_bad = [(raw, n) for raw, n in cn_amounts(text) if n not in allowed]
-    if cn_bad:
-        raw = [r for r, _ in cn_bad]
-        return False, f"把数字改成了中文写法 {raw}，对不上库里的任何一条"
+    # solution 给的是**行动建议**，不是账。「你先闭眼三分钟」里的时长是他要做的事，
+    # 不是从库里抄的数——按「编造数字」拦会把一条正确的建议打回兜底
+    # （实测就这么掉过一次：原文「你先闭眼三分钟，回来只做最熟的那几道」）。
+    # 承诺类（「再学 30 分钟」）另有 _COMMIT_MINUTES 管着，不会漏。
+    if facts.get("mode") != "solution":
+        cn_bad = [(raw, n) for raw, n in cn_amounts(text) if n not in allowed]
+        if cn_bad:
+            raw = [r for r, _ in cn_bad]
+            return False, f"把数字改成了中文写法 {raw}，对不上库里的任何一条"
 
-    stray = [int(n) for n in re.findall(r"\d+", text) if int(n) not in allowed]
-    if stray:
-        return False, f"出现事实里没有的数字 {stray}"
+        stray = [int(n) for n in re.findall(r"\d+", text) if int(n) not in allowed]
+        if stray:
+            return False, f"出现事实里没有的数字 {stray}"
 
     # 他在问今天的账，回答里一个数都没有，就是不认账。
     # 清单里「data 出口必须有分钟数」以前只写在文档上：它回「唔，你今天做了不少呢」，
@@ -1013,24 +1291,162 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
     return True, ""
 
 
+# ---------- 对话的连贯性 ----------
+# 「一问一答」和「像认识你的人」的差别不在模型大小，而在这一轮它手上有没有上下文。
+# 以前这里只有一串「他更早说过：」，于是他每换一个话题，它都像第一次听说——
+# 不知道自己上一句答了什么，也不知道他上一句问的是什么，只能重新挑一样素材念。
+# 下面这几个函数就是把这三样东西补上：他上一句问的、我上一轮答的、他这一句顺着哪件事补的。
+
+# 拿来回指的关键词要去掉这些：它们是字，不是话题
+_STOP_HISTORY = ("的", "了", "吗", "呢", "吧", "和", "跟", "我", "你", "它", "这", "那",
+                 "就", "也", "还", "是", "在", "有", "个", "们", "不", "没", "啊", "呀",
+                 "今天", "怎么样")
+
+
+def _prior_user_turns(history: list[dict] | None, current_text: str = "",
+                      limit: int = 5) -> list[str]:
+    """他最近说过的几句（不含这一句），从旧到新。"""
+    out: list[str] = []
+    cur = (current_text or "").strip()
+    for t in (history or []):
+        if t.get("role") != "user":
+            continue
+        c = (t.get("content") or "").strip()
+        if not c or c == cur:
+            continue
+        out.append(c)
+    return out[-limit:]
+
+
+def _last_assistant_line(history: list[dict] | None) -> str:
+    """它自己上一轮答的那句。它看不见这句，就不知道该接着哪儿说。"""
+    for t in reversed(history or []):
+        if t.get("role") == "assistant":
+            return (t.get("content") or "").strip()
+    return ""
+
+
+def _core_words(text: str, limit: int = 5) -> list[str]:
+    """一句话里能拿来回指的关键词：按出现顺序，去重、去停用字。"""
+    out: list[str] = []
+    for chunk in re.findall(r"[\u4e00-\u9fa5]{2,4}", text or ""):
+        if len(chunk) < 2 or chunk in _STOP_HISTORY:
+            continue
+        if chunk in out:
+            continue
+        out.append(chunk)
+    return out[:limit]
+
+
+def _continuation_line(history: list[dict] | None, current_text: str = "") -> dict:
+    """他这一句是不是顺着上一句往下补的（「判断推理呢？」「那资料分析呢？」）。
+
+    这类短句里既没有情绪词也没有问法词，单看一句判不出它在问什么——
+    但把它和上一句并排看，重合的那几个字就是话题。把这个"锚"找出来，
+    模型才不会把它当成一句全新的闲聊，重新挑一样素材念一遍。
+    """
+    prior = _prior_user_turns(history, current_text)
+    if not prior:
+        return {}
+    cur = (current_text or "").strip()
+    if not cur or len(cur) > 22:
+        return {}
+    if any(w in cur for w in _SOFT_WORDS):
+        return {}                      # 带情绪词的短句是叹气，不是追问
+    same = [w for w in _core_words(prior[-1]) if w in cur]
+    if not same:
+        return {}
+    return {
+        "anchor": same[0],
+        "line": "他这一句是顺着「{}」往下问的".format(same[0]),
+    }
+
+
+def _mentioned_recently(history: list[dict] | None, memories: list[dict],
+                        window: int = 8) -> list[str]:
+    """最近这几轮已经提过的旧事。这轮别再提——一件小事被反复提，听着像没话找话。"""
+    blob_parts = []
+    for t in (history or [])[-window:]:
+        if t.get("role") == "assistant":
+            blob_parts.append(t.get("content") or "")
+    blob = " ".join(blob_parts)
+    if not blob:
+        return []
+    hits: list[str] = []
+    for m in (memories or []):
+        text = (m.get("text") or m.get("quote") or "")
+        words = [w for w in _core_words(text, limit=8)]
+        if len(words) >= 2 and all(w in blob for w in words[:2]):
+            hits.append(text)
+    return hits[:5]
+
+
 def build_messages(user_text: str, *, facts: dict, history: list[dict] | None = None) -> list[dict]:
     """拼请求。system 必须第一条——这是 OpenAI 协议的硬要求，也是人设的地基。
 
-    历史**只喂他说过的话，不喂它自己的原句**。这条是踩出来的：
-    以前把上一轮它的回答一起放回去，qwen-flash 会整句照抄（连着三轮同一个句子），
+    历史**不喂它自己的原句，只喂原句的话题**。这条是踩出来的：
+    以前把上一轮它的整句回答放回去，qwen-flash 会一字不改地照抄（连着三轮同一个句子），
     而抄出来的那句又落库、又进下一轮的历史，于是越问越像唱片跳针。
-    它需要知道的是「他刚才说过什么」，不是「我上句说了什么」——
-    后者由 ``check_reply`` 的复读闸在出口挡，没必要让它自己看见。
+    但它**完全看不见自己答过什么**也不行——那就不知道该顺着哪儿往下说，
+    于是它每次都重新挑一样素材念，这就是"像写死的程序"最直接的来源。
+    折中办法：给它关键词，不给句子。它知道上一轮聊的是「模考」，但不拿到可抄的整句。
     """
     msgs: list[dict] = [{"role": "system", "content": PERSONA}]
-    said = [t for t in (history or []) if t.get("role") == "user"]
-    for turn in said[-4:]:
+    # 远近要标死。以前一律写成「他更早说过：X」，几条并排扔进来谁先谁后全靠它猜——
+    # 实测安慰的时候它把**更早**那句当成「你刚才说」，人还没叹气它就开始回顾，
+    # 听着像没在听。现在最新的排在最前面，并且写明是第几句。
+    cur_text = (user_text or "").strip()
+    said = [t for t in (history or []) if t.get("role") == "user"
+            and (t.get("content") or "").strip() != cur_text][-3:]
+    his_blob = " ".join((t.get("content") or "") for t in (history or [])
+                        if t.get("role") == "user")
+    for i, turn in enumerate(reversed(said)):
         content = (turn.get("content") or "").strip()
-        if content:
-            msgs.append({"role": "user", "content": f"（他更早说过：{content[:200]}）"})
+        if not content:
+            continue
+        label = ("他刚说的上一句" if i == 0 else
+                 "再往前一句" if i == 1 else "更早的一句")
+        msgs.append({"role": "user", "content": f"（{label}：{content[:160]}）"})
+    # 它自己上一轮答了什么：只给话题词，不给那句话。
+    # 有了这个它才知道"刚才我们聊到哪儿了"，但不至于把那句原封不动再念一遍。
+    # 话题词优先挑**他话里也出现过的**——那才是这轮的主题，
+    # 否则会挑到「先歇会儿」这类它自己的口头禅，指了等于没指。
+    own = _last_assistant_line(history)
+    own_words = [w for w in _core_words(own, limit=6) if w in his_blob][:2]
+    if not own_words:
+        own_words = _core_words(own, limit=2)
+    if own_words:
+        msgs.append({"role": "user",
+                     "content": "（你上一轮答的是关于「{}」的那句，"
+                                "**换一句话往下接**，不许把那句再说一遍）".format("、".join(own_words))})
+    # 他这一句是顺着上一句往下补的（「那资料分析呢？」）。
+    # 这种短句单看判不出在问什么，把锚点出来它才不会当成全新话题重念一遍素材。
+    cont = _continuation_line(history, user_text)
+    if cont.get("line"):
+        msgs.append({"role": "user", "content": "（{}，接着这个说，"
+                                                "别当成新话题重新介绍一遍）".format(cont["line"])})
+    # 最近这几轮已经提过的旧事，这轮别再提。
+    # 一件小事被连着提三遍，听着就不是记得他，而是没话找话。
+    # recap 例外——他要的就是刚才那些话，这时候"重复"是任务本身。
+    if facts.get("mode") != "recap":
+        stale = _mentioned_recently(history, facts.get("memories") or [])
+        if stale:
+            msgs.append({"role": "user",
+                         "content": "（这几件事最近刚提过，这轮别再提：{}）".format(
+                             "；".join(s[:22] for s in stale))})
     facts_json = __import__("json").dumps(facts, ensure_ascii=False, separators=(",", ":"))
     hint = ""
-    if facts.get("mode") == "address":
+    if facts.get("mode") == "recap":
+        # 这一支是唯一允许、而且必须复述自己旧话的地方。
+        # 其它模式不给它的原话是为了防照抄，但「我们刚才说了什么」的任务本来就是复述，
+        # 不给就等于让它编。所以这里连「谁说」都标好，只许照着 recent 说。
+        hint = ("\n他在问你们刚才说了什么。照 facts.recent **从最近一轮往前说**："
+                "先说他问的是什么，再说你当时怎么答的，最多说两轮。"
+                "第一句用「你刚才说……」或者「我们刚聊到……」开头。"
+                "**不要报今天的账**——不要说分钟数、正确率、题量、科目，他问的是话不是数。"
+                "facts.recent 是空的就说刚才没聊几句，让他接着说，别编内容。"
+                "40 到 60 字。")
+    elif facts.get("mode") == "address":
         name = facts.get("known_name")
         if name:
             hint = ("\n他在问你该叫他什么。直接叫出 facts.known_name（「{}」），"
@@ -1104,6 +1520,17 @@ def build_messages(user_text: str, *, facts: dict, history: list[dict] | None = 
         hint = ("\n他现在难受。先认下这件事确实难，再给一个小动作（推瓜子、趴他手边、"
                 "拱他一下），20 到 40 个字。不要说「我听见了」这种空话，不要给办法，"
                 "也不要用「你刚说……」开头——那是在把他的话念回来。")
+    elif facts.get("mode") == "solution":
+        # 和 comfort 相反：他要的是办法，只给陪伴等于把问题晾在那儿。
+        # 但也别列清单——三条一起上就成了说教，他这会儿没力气听清单。
+        hint = ("\n他现在累，而且明确问了「怎么办」。先从 facts.tips 里挑**一条**，"
+                "说清楚具体怎么做（「把手机放到看不见的地方，回来只做最熟的那几道」这种），"
+                "前面认一句他确实累，20 到 40 字。"
+                "只挑一条，不要列三条；不要报任何数字；不要提截图；"
+                "不要说「我听见了」「你要加油」。"
+                # 他会把他的旧话写进历史（「他更早说过：模考又崩了」），模型很容易
+                # 拿这句当开场，于是又把处境复述一遍——他要的是下一步，不是被重复一遍。
+                "**不要复述他之前说过的话**，不要用「你刚说……」开头，也别提模考、错题这些旧账。")
     # 他刚问过同一件事。不提醒的话，它会照上一遍的句式再念一次——
     # 数没错，但界面上看着像卡死（用户截图里骂的就是这个）。
     # 只说「你答过了」不够：它的原话被 build_messages 滤掉了，它根本不知道自己
@@ -1187,6 +1614,13 @@ def retry_messages(messages: list[dict], rejected: str, reason: str) -> list[dic
                     "再请他告诉你。不许把你的名字当成他的名字。")
     elif "没说出自己的名字" in (reason or ""):
         specific = "他在问你是谁。你叫团团，就直说「我叫团团」，别忘了加一句你在陪他。"
+    elif "复述跟刚才那句几乎一样" in (reason or ""):
+        # 他问「刚才说了什么」，它把上一遍的复述原样又播了一遍。
+        # 这里不能照搬下面「复读」那条改法——那条要求「换一句全新的」，
+        # 而 recap 的任务就是复述，换掉内容等于不答。要换的只是入口。
+        specific = ("上一遍已经这么复述过了。换个开头：先用一句话说你们在聊哪件事"
+                    "（「你在说模考崩了那件事」），再说你当时是怎么回他的。"
+                    "内容还是那件事，但句子不能跟上一遍一样。")
     elif "原样说了一遍" in (reason or ""):
         # 同一件事他问了两遍。这时候不能叫它「别重复」——账就那笔，数还得说。
         # 要改的是句子的壳：开头不能跟上一遍沾边，但同一笔账得说全。
@@ -1360,6 +1794,31 @@ def fallback(user_text: str, facts: dict | None = None, repeat: bool = False) ->
     它在应他这句，不是卡住了。
     """
     facts = facts or {}
+    # 他问「刚才说了什么」，回「我在呢」等于装没听见。手上真有他的原话就念一句，
+    # 没有就老实说没聊几句——别编一段不存在的对话。
+    if facts.get("mode") == "recap":
+        recent = facts.get("recent") or []
+        # 最后一条可能就是他上一遍问的「刚才聊到哪了」。拿它当内容，
+        # 等于用问句回答问句（实测真出过：「你刚才说『刚才聊到哪了』」）。
+        said = [r.get("text", "") for r in recent
+                if r.get("who") == "他" and not _asks_recap(r.get("text") or "")]
+        if said:
+            # 同一件事问了不下两遍、每次都掉兜底时，老是念最近那一句就是两条一样的
+            # 泡泡。往前挪一句，说得还是真的，只是换了他刚才说的另一件。
+            pick = said[-2] if repeat and len(said) >= 2 else said[-1]
+            head = "刚说过啦，" if repeat else ""
+            return f"{head}你刚才说「{pick}」，我记着呢。"
+        # 他自己的话都被问句占满了，就说我刚才答过什么——那也是对话的一部分
+        mine = [r.get("text", "") for r in recent if r.get("who") == "我"]
+        if mine:
+            return f"我刚才跟你说的是「{mine[-1]}」。"
+        return "刚才没聊几句呀，你接着说，我听着。"
+    # 他问了怎么办，就别只回一句「我在」。给一条不带数字的具体事，笨但有用。
+    if facts.get("mode") == "solution":
+        tips = facts.get("tips") or []
+        if tips:
+            return "那先试一个：" + tips[len(user_text or "") % len(tips)] + "。"
+        return "先别硬撑，起来走一走再说。"
     # 问名字的两支不能掉进「我在呢」：他问的是称呼，答一句空话等于装没听见。
     # 有名字就叫出来；没有就明说不知道，并请他告诉你。
     if facts.get("mode") == "capability":
@@ -1419,3 +1878,5 @@ def _plain_answer(facts: dict, repeat: bool = False) -> str:
     if kind == "no_data":
         return "题量还太少，我先不下结论。"
     return ""
+
+# _SURVIVE_TEST_

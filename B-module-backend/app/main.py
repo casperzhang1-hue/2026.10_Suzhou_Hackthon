@@ -196,7 +196,17 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
 
         # 历史要在落库**之前**取。反过来的话，他这一句会同时出现在历史和最后的
         # 「他说：……」里，模型一次看到两遍同一个问题——实测这会把它推向复读。
-        history = body.history or store.chat_history(user_id=body.user_id, limit=8)
+        #
+        # 取两份是有原因的：
+        # - ``dialogue`` 是库里的完整对话（含 assistant 的每一句），给 recap 用。
+        #   他问「我们刚才说了什么」时，它必须看得见自己说过什么，否则只能报账本。
+        # - ``history`` 是前端传来的那份，只保证有他的提问，给复读闸和拼请求用。
+        dialogue = store.chat_history(user_id=body.user_id, limit=8)
+        # 前端传来的那份不一定带它自己的回答（有的版本只发他的提问）。
+        # 复读闸和「你上一遍说了什么」都要靠它的原话，少了就判不出重复——
+        # 所以没带 assistant 时，以库里那份为准。
+        has_reply = any(t.get("role") == "assistant" for t in (body.history or []))
+        history = body.history if has_reply else dialogue
         # 出口的复读闸要拿它说过的话比。分两堆：答别的问题时说的（一律不许再出现）、
         # 答同一个问题时说的（只挡逐字照抄）。换了个问题却回同一句，
         # 才是用户截图里骂的那个毛病。
@@ -212,6 +222,7 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
         facts = persona.build_facts(
             today=today, modules=modules, memories=store.memories, text=text,
             uploads=store.uploads(user_id=body.user_id),
+            history=dialogue,
         )
         out["facts"] = facts
 
@@ -266,8 +277,8 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             out["guard"] = {"ok": False, "reason": reason}
             # 同一件事问了两遍、两次都吐出同一句：这时候兜底要认一句「刚说过啦」，
             # 否则界面上还是两条一模一样的泡泡——正是用户截图里骂的那个样子。
-            out["text"] = persona.fallback(text, facts=facts,
-                                           repeat="原样说了一遍" in reason)
+            out["text"] = persona.fallback(text, facts=facts, repeat=bool(reason) and any(
+                w in reason for w in ("原样说了一遍", "几乎一样", "整段搬过来")))
 
         store.add_chat(user_id=body.user_id, role="assistant", content=out["text"],
                        source=out["source"])

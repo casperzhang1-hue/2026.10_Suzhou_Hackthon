@@ -252,8 +252,13 @@ def test_接口_没什么可记的就别硬记(client):
 def test_接口_对话落库刷新不丢(client):
     client.post("/api/pet/say", json={"text": "我今天有点累"})
     d = client.post("/api/pet/say", json={"text": "你还记得我刚才说啥吗"}).json()
-    # 第二句请求里没带 history，事实包里也要能看见第一句留下的记忆
-    assert any("我今天有点累" in str(m) for m in d["facts"]["memories"])
+    # 第二句请求里没带 history，它也得能从库里翻出刚才那句。
+    # 「你还记得我刚才说啥吗」现在走 recap 支（他问的就是「刚才说了什么」），
+    # 答案来自 facts.recent —— 库里的真实对话，他的提问和它自己的回答都在里面。
+    # 比原来只看 facts.memories 更贴近「落库不丢」：它得真把一句话复述出来，
+    # 而不只是查到一条记忆。
+    recent = d["facts"].get("recent") or []
+    assert any("我今天有点累" in str(r) for r in recent), recent
 
 
 # ---------- 接口：真的看一眼图 ----------
