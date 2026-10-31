@@ -5,8 +5,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import db, pet_chat as petchat, service
-from .schemas import RecordIn
+from . import db, pet_brain as brain, pet_chat as petchat, service
+from .schemas import RecordIn, VerifyIn
 from .store import Store
 
 DATA_DIR = Path(os.environ.get("HAMSTER_DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
@@ -77,6 +77,37 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
         with store.db.lock:
             modules = db.module_stats(store.db.conn)
         return petchat.reply(intent, today=today, modules=modules, memories=store.memories)
+
+    @app.get("/api/pet/context")
+    def pet_context(intent: str = "today", user_id: str = "demo_zhang"):
+        """模型嘴的事实底座：同一份数据，整理成带口径标签的 facts。
+
+        前端拿它去调模型，模型只负责措辞；数字白名单与分句归属校验都在
+        pet_brain 里，前端调完自己验一遍，验不过就回落 /api/pet/chat 的模板。
+        """
+        intent = (intent or "").strip().lower()
+        if intent not in brain.INTENTS:
+            intent = "today"
+        today = service.today_view(store.records, get_today())
+        with store.db.lock:
+            modules = db.module_stats(store.db.conn)
+        return brain.context(intent, today=today, modules=modules, memories=store.memories)
+
+    @app.post("/api/pet/verify")
+    def pet_verify(body: VerifyIn):
+        """模型答完的复核。校验逻辑只放在后端一份，前端不复制一份 JS——
+        两份实现必然漂移，而这种逻辑漂移在路演现场是没法当场发现的。
+
+        不通过时 ok=false，前端回落到模板嘴，用户只会看到一句朴素但真的话。
+        """
+        today = service.today_view(store.records, get_today())
+        with store.db.lock:
+            modules = db.module_stats(store.db.conn)
+        facts = brain.build_facts(body.intent, today=today, modules=modules, memories=store.memories)
+        passed, reason = brain.check(body.text, facts)
+        if not passed:
+            print(f"[pet_verify] 拒绝模型回答：{reason} | 原文：{body.text[:80]}")
+        return {"ok": passed, "reason": reason}
 
     return app
 

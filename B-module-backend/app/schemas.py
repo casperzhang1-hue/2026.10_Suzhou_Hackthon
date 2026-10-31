@@ -33,3 +33,9 @@ class RecordIn(BaseModel):
     confirmed_at: datetime | None = None
     user_id: str = "demo_zhang"
     manual: bool = False
+
+
+class VerifyIn(BaseModel):
+    """POST /api/pet/verify：模型答完的复核请求体。"""
+    intent: str = "today"
+    text: str = ""

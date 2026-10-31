@@ -286,7 +286,7 @@ b,strong{font-weight:600}
 }
 
 /* ---- 「跟它说两句」面板（长按 800ms 唤出） ---- */
-.pchat{position:absolute;inset:0;z-index:80;pointer-events:none;overflow:hidden}
+.pchat{position:fixed;inset:0;z-index:200;pointer-events:none;overflow:hidden}
 .pchat.on{pointer-events:auto}
 .pchat-mask{position:absolute;inset:0;background:rgba(0,0,0,.44);opacity:0;transition:opacity .3s}
 .pchat.on .pchat-mask{opacity:1}
@@ -1066,7 +1066,10 @@ var petChatEls = null;
 
 function ensureChat(){
   if(petChatEls) return petChatEls;
-  var host = $('#sheet') ? $('#sheet').parentNode : document.body;
+  /* 必须挂到 body，不能留在舞台里：#phWrap 上有 transform（缩放动画），会新建层叠上下文，
+     .pchat 的 z-index 就被困在里面，底部 .dock(z-index 60) 反而盖住整个面板——按钮点不动。
+     这是实测出来的：直接调 openChat() 看不出来，只有发真实鼠标事件才会撞上。 */
+  var host = document.body;
   var box = document.createElement('div');
   box.className = 'pchat';
   box.id = 'petChat';
@@ -1152,20 +1155,126 @@ function addTyping(){
   return line;
 }
 
-/* 三个话题的唯一出口：2 秒超时就切模板，绝不让用户盯着空屏 */
+/* ---------- ① 三个话题的唯一出口：三条链路按序降级，任何一步失败都不留空屏 ----------
+   ① 模型嘴：后端给事实包 → 前端直连云模型流式 → 后端复核数字 → 上屏
+   ② 模板嘴：/api/pet/chat 规则拼装，2ms，永远说真话
+   ③ 断线兜底：PET_FALLBACK，一个数字都不带
+   为什么是前端直连而不是后端代理：云服务规范明令禁止自建 BFF 转发这条通道，
+   而 publishableKey 本身是公开标识，直连才是它设计的用法。 */
+var PET_MODEL = 'deepseek-v4.1-flash';   /* 实测首字 1.1s / 全文 1.5s；auto 要 6s，hy3 要 14s */
+var PET_CLOUD = {
+  endpoint: 'https://supervise-pet.app.workbuddy.host',
+  publishableKey: 'wbpk_7U8B8g9BI4EjIvkNwjFaTH_BLi6qfTHTGU941OO0qhF58RyOPDNTBwQ',
+  /* 锁死版本，不用 @dev 浮动标签：路演当天上游发 breaking change 就是事故 */
+  sdkUrl: 'https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@0.1.4-dev.ca27990.202610161713/lib/index.global.js'
+};
+var PET_FIRST_MS = 6000;    /* 首字上限：flash 实测 1.1s，留 5 倍余量 */
+var PET_TOTAL_MS = 14000;   /* 整段上限 */
+
+var petCloudPromise = null;
+function petCloud(){
+  if(petCloudPromise) return petCloudPromise;
+  petCloudPromise = new Promise(function(resolve, reject){
+    function boot(){
+      try{
+        resolve(window.WorkBuddyCloud.createWorkBuddyCloud({
+          endpoint: PET_CLOUD.endpoint,
+          publishableKey: PET_CLOUD.publishableKey
+        }));
+      }catch(e){ reject(e); }
+    }
+    if(window.WorkBuddyCloud) return boot();
+    var s = document.createElement('script');
+    s.src = PET_CLOUD.sdkUrl;
+    s.onload = boot;
+    s.onerror = function(){ reject(new Error('云 SDK 加载失败')); };
+    document.head.appendChild(s);
+  });
+  /* 失败后允许下次重试，不要一次失败就永久卡死 */
+  petCloudPromise.catch(function(){ petCloudPromise = null; });
+  return petCloudPromise;
+}
+
+/* 把 SSE 流拼成全文，每来一段就回调，让气泡逐字长出来。
+   用 Symbol.asyncIterator 手动 next() 而不是 for await——与识别模块的写法保持一致。 */
+function petCollect(stream, onDelta){
+  return new Promise(function(resolve, reject){
+    if(stream && typeof stream[Symbol.asyncIterator] === 'function'){
+      var it = stream[Symbol.asyncIterator]();
+      var acc = '';
+      (function step(){
+        it.next().then(function(r){
+          if(r.done) return resolve(acc);
+          var d = r.value && r.value.choices && r.value.choices[0] && r.value.choices[0].delta;
+          if(d && d.content){ acc += d.content; onDelta(d.content, acc); }
+          step();
+        }, reject);
+      })();
+      return;
+    }
+    /* 兼容一次性返回形态 */
+    var one = stream && stream.choices && stream.choices[0] && stream.choices[0].message;
+    if(one && one.content) return resolve(one.content);
+    reject(new Error('模型流不可读'));
+  });
+}
+
+/* 流式气泡：可增长、可补来源、可整行丢弃 */
+function addStreamLine(){
+  var line = document.createElement('div');
+  line.className = 'pchat-line pet';
+  var body = document.createElement('div');
+  body.className = 'pchat-bub';
+  line.appendChild(body);
+  petChatEls.log.appendChild(line);
+  petChatEls.log.scrollTop = petChatEls.log.scrollHeight;
+  return {
+    set: function(s){
+      body.textContent = s;
+      petChatEls.log.scrollTop = petChatEls.log.scrollHeight;
+    },
+    meta: function(s){
+      if(!s) return;
+      var m = document.createElement('div');
+      m.className = 'pchat-meta';
+      m.textContent = s;
+      line.appendChild(m);
+    },
+    drop: function(){ if(line.parentNode) line.parentNode.removeChild(line); }
+  };
+}
+
 function petAsk(intent, label){
   var el = ensureChat();
   addChatLine('me', label);
-  var typing = addTyping();
-  var settled = false;
-  var timer = null;
 
-  function finish(text, meta){
+  var typing = addTyping();
+  var streamLine = null;
+  var settled = false;
+  var timers = [];
+  var ctl = null;
+
+  function stopTimers(){ timers.forEach(clearTimeout); timers = []; }
+  function later(fn, ms){ var t = setTimeout(fn, ms); timers.push(t); return t; }
+  function dropTyping(){ if(typing && typing.parentNode) typing.parentNode.removeChild(typing); typing = null; }
+  function offline(){ return !window.API || !API.online; }
+  function bail(){ return PET_FALLBACK[intent] || '这个我说不清。'; }
+
+  /* 唯一的收敛口：答案一落定，其余异步分支全部作废。
+     keepStream=true 表示复用已经在屏幕上长出来的那段流式文字（成功路径），
+     false 表示把它整行丢掉——半句假话比没话更糟。 */
+  function show(text, meta, keepStream){
     if(settled) return;
     settled = true;
-    clearTimeout(timer);
-    if(typing && typing.parentNode) typing.parentNode.removeChild(typing);
-    addChatLine('pet', text, meta);
+    stopTimers();
+    dropTyping();
+    if(!keepStream && ctl){ try{ ctl.abort(); }catch(e){} }
+    /* 流式那段如果不能用，先丢掉再画新答案。
+       只 drop 不重画会留下空白——注入测试踩到过：模型答错被复核拦下后，
+       界面上一个字都没有，比说错话还糟。 */
+    if(streamLine && !keepStream){ streamLine.drop(); streamLine = null; }
+    if(streamLine){ streamLine.set(text); streamLine.meta(meta); }
+    else addChatLine('pet', text, meta);
     /* 面板外也让它开口，但长答案只截前半句——否则气泡会盖住整只仓鼠 */
     if(petHomeAPI){
       var brief = text.length > 30 ? text.slice(0, 30) + '……' : text;
@@ -1173,22 +1282,93 @@ function petAsk(intent, label){
     }
   }
 
-  function fallback(){ finish(PET_FALLBACK[intent] || '这个我说不清。'); }
+  /* ② 模板嘴：库里是什么样就说什么样，不做任何加工 */
+  function template(){
+    if(settled) return;
+    stopTimers();
+    if(offline()){ show(bail(), ''); return; }
+    fetch(API.base + '/api/pet/chat?intent=' + encodeURIComponent(intent) + '&user_id=demo_zhang',
+          {cache:'no-store'})
+      .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(d){
+        if(!d || !d.text){ show(bail(), ''); return; }
+        var meta = '来自 SQLite';
+        if(d.facts && d.facts.id) meta += ' · ' + d.facts.id;
+        else if(d.facts && d.facts.worst) meta += ' · ' + d.facts.worst;
+        show(d.text, meta, false);
+      })
+      .catch(function(){ show(bail(), ''); });
+  }
 
-  if(!window.API || !API.online){ setTimeout(fallback, 420); return; }
+  if(offline()){ later(template, 420); return; }
 
-  timer = setTimeout(fallback, 2000);
-  fetch(API.base + '/api/pet/chat?intent=' + encodeURIComponent(intent) + '&user_id=demo_zhang',
+  /* ① 模型嘴：事实包 → 流式 → 复核。任何一步抛错都落到 template() */
+  var answer = '';
+  fetch(API.base + '/api/pet/context?intent=' + encodeURIComponent(intent) + '&user_id=demo_zhang',
         {cache:'no-store'})
-    .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(d){
-      if(!d || !d.text){ fallback(); return; }
-      var meta = '来自 SQLite';
-      if(d.facts && d.facts.id) meta += ' · ' + d.facts.id;
-      else if(d.facts && d.facts.worst) meta += ' · ' + d.facts.worst;
-      finish(d.text, meta);
+    .then(function(r){ if(!r.ok) throw new Error('context HTTP ' + r.status); return r.json(); })
+    .then(function(ctx){
+      if(!ctx || !ctx.facts) throw new Error('事实包为空');
+      return petCloud().then(function(cloud){
+        ctl = new AbortController();
+        var seen = false;
+        var firstTimer = setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, PET_FIRST_MS);
+        var totalTimer = setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, PET_TOTAL_MS);
+        timers.push(firstTimer, totalTimer);
+        /* create() 返回的是 async iterable，不是 Promise——直接 .then 会炸。
+           Promise.resolve 两种形态都能吃：是 thenable 就等，是 iterable 就原样透传。 */
+        return Promise.resolve(cloud.llm.chat.completions.create({
+          model: PET_MODEL,
+          stream: true,                 /* 云通道只支持流式，传 false 会在发包前报错 */
+          temperature: 0.3,             /* 压低发挥空间，短答案 + 低温度 = 幻觉率最低 */
+          max_tokens: 160,
+          signal: ctl.signal,
+          messages: [
+            { role:'system', content: ctx.system_prompt },   /* 必须是第一条，SDK 不补默认值 */
+            { role:'user', content: '事实（JSON）：\n' + JSON.stringify(ctx.facts) + '\n\n他问：' + ctx.question }
+          ]
+        })).then(function(stream){
+          return petCollect(stream, function(delta, acc){
+            if(settled) return;
+            if(!seen){
+              seen = true;
+              clearTimeout(firstTimer);
+              dropTyping();
+              streamLine = addStreamLine();
+            }
+            answer = acc;
+            streamLine.set(acc);
+          });
+        }).then(function(full){
+          clearTimeout(firstTimer);
+          clearTimeout(totalTimer);
+          return full || answer;
+        });
+      });
     })
-    .catch(function(){ fallback(); });
+    .then(function(text){
+      if(settled) return;
+      if(!text || !text.trim()) throw new Error('模型没吐字');
+      /* 复核放在后端：校验逻辑只有一份，前端复制一份必然漂移 */
+      return fetch(API.base + '/api/pet/verify', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({intent:intent, text:text}),
+        cache:'no-store'
+      }).then(function(r){
+        if(!r.ok) throw new Error('verify HTTP ' + r.status);
+        return r.json();
+      }).then(function(v){
+        if(v && v.ok){ show(text, '模型 · 数字已核对', true); return; }
+        console.warn('[pet] 数字复核不通过（' + ((v && v.reason) || '未知') + '），回退模板');
+        template();
+      });
+    })
+    .catch(function(e){
+      if(settled) return;
+      console.warn('[pet] 模型链路中断：' + (e && e.message) + '，回退模板');
+      template();
+    });
 }
 
 /* ---------- ②③ 绑定手势 ---------- */
