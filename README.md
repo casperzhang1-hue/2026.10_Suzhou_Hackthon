@@ -1,97 +1,83 @@
-# 考公陪跑 Agent · 2026.10 苏州 Hackathon
+# 监督小宠 · 2026.10 苏州黑客松
 
-> 一只仓鼠，记得住你 41 天前说过「资料分析我一定能拿下」。
-> 上传学习截图 → AI 识别 → 你确认 → 仓鼠变化 → 它记得你。
-
----
-
-## 一、一句话
-
-考公人每天刷题，但**没人记得他 41 天前说过什么**。打卡群只记天数，App 只给冷冰冰的正确率曲线。
-
-我们让一只仓鼠陪你：它会因为你的截图而变化，会在你学太晚时劝你停，会在你承诺过的模块下滑时把那句话翻出来给你看。
+> AI 学习监督助手：拍一张学习截图 → AI 识别学习数据 → 宠物养成式鼓励反馈
+> 参赛时间：2026-10-31 ｜ 代码冻结：18:00（G4）｜ 截止 22:16
+> 定位一句话：**卖督学，用陪伴交付（仓鼠五态），靠记忆锁住。别人用规则督你，我们用关系督你。**
 
 ---
 
-## 二、仓库怎么分工（每人一个目录）
+## 模块地图
 
-| 目录 | 负责人 | 内容 | 状态 |
+| 模块 | 职责 | 状态 | 入口 |
 |---|---|---|---|
-| **`A/`** | A · 前端/视觉 | 宠物素材、接口契约、mock 服务、seed 数据、原型、Vue 工程 | ✅ **已上传** |
-| `B/` | B · 后端 | 三个真接口、状态引擎、入库 | ⏳ 待 B 推 |
-| `C/` | C · AI 识别 | recognize.js、phrases、测试集 | ⏳ 待 C 推（r4 已定稿，识别侧已结项） |
-| `D/` | D · 产品/路演 | 故事线、seed 数据、录屏、Pitch | ⏳ 待 D 推 |
+| A · 前端 | 上传 → 确认卡 → 今日屏 / 记忆屏 / 出分日屏，宠物五态 | ✅ 已入库（13:30 迁入，13:50 补 mock 服务 / seed / 接口契约） | [`A-module-frontend/`](A-module-frontend/) |
+| **C · AI 学习截图识别** | 识别截图中的学习数据（来源 App / 时长 / 题量 / 正确率 / 模块明细），输出标准 JSON + 鼓励等级 | ✅ **已完成 v1.1-r5，验收通过（10/10 跑批）** | **[`C-module-recognition/`](C-module-recognition/)** |
+| B · 后端与状态引擎 | `/api/records` 入库、`computeDailyState` + 6 测试、`/api/today`（**必须带 gap 缺口行**） | 🔴 进行中（全队唯一阻塞） | [`B-module-backend/`](B-module-backend/) |
+| D · 数据与素材 | seed.json（45 天）、路演逐字稿、pitch.pdf、fallback.mp4 | 🔴 进行中 | [`D-module-materials/`](D-module-materials/) |
 
-> **请在自己的目录下操作，别动别人的。** 根目录只放这份 README。
+> 各模块负责人把自己的代码放进对应目录，**只动自己的目录**；跨模块的接口契约以
+> [`C-module-recognition/docs/接口草案_C模块_识别结果JSON_v1.1.md`](C-module-recognition/docs/接口草案_C模块_识别结果JSON_v1.1.md)
+> 为单一事实源。需求与验收以 [`docs/考公陪跑Agent_PRD_v1.1.md`](docs/考公陪跑Agent_PRD_v1.1.md) 为准。
 
----
+## C 模块 30 秒速览（演示核心路径）
 
-## 三、A 已上传了什么
+1. 前端引入一个文件：`<script src="C-module-recognition/recognize.js"></script>`
+2. 调用：`const result = await window.recognizeScreenshot(file, "demo_zhang")`
+3. 返回标准 JSON（接口 v1.1）：学习数据 + 异常警告 + 鼓励等级
+4. 永不抛异常、永不返回 null——前端等待态不会被卡死
 
-进入 **[`A/README.md`](A/README.md)** 看完整说明。六块：
+详细文档 → **[`C-module-recognition/README.md`](C-module-recognition/README.md)**
 
-```
-A/
-├── pet-assets/     ★ 仓鼠五态素材（CSS + JS + 透明 WebP）—— 全队统一形象入口
-├── contract/       ★ 三接口契约 + 4 份示例 JSON —— B 照着实现
-├── mock-server/    ★ 零依赖 Node 后端 —— B 交付前，全链路靠它跑通
-├── seed/           45 天自洽假数据 —— D 直接用或替换
-├── prototype/      四版原型 HTML（单文件版双击即开）—— D 录屏用
-├── frontend/       Vue 工程 —— B 接手参考
-└── test-images/    C 的 10 张真实截图测试集
-```
+## A 模块 30 秒速览（13:50 新增）
 
-**A 不只传了素材。** 因为 B 的接口没交、D 的 seed 逾期，光传素材链路照样是断的——所以额外放了 `mock-server/`（能立刻跑起来的后端）和 `seed/`（兜底数据）。
-
----
-
-## 四、三分钟跑通全链路（B 没交接口也能跑）
+B 接口未交、D 的 seed 逾期，光有素材链路是断的。所以补了三样**能让链路立刻跑起来**的东西：
 
 ```bash
-# 1. 起 mock 后端（零依赖，不用 npm install）
-cd A/mock-server && node server.js        # http://127.0.0.1:8787
-
-# 2. 起前端
-cd A/frontend && npm install && npm run dev   # http://127.0.0.1:5173
-
-# 3. 不想装依赖？
-#    双击 A/prototype/仓鼠陪跑_原型_接真数据_单文件版.html
+cd A-module-frontend/mock-server && node server.js    # 零依赖，8787 端口，三个接口全实现
 ```
 
-**B 交付后**：前端只改 `A/frontend/src/api.js` 里的 `API_BASE` 一个常量，业务代码一行不动。
+| 新增目录 | 解决什么 |
+|---|---|
+| `A-module-frontend/mock-server/` | B 交付前，前端有后端可接，全链路能跑 |
+| `A-module-frontend/seed/` | D 逾期，A 先造 45 天兜底数据，D 来了直接替换 |
+| `A-module-frontend/contract/` | B 照字段表实现，不用猜 |
 
----
+**B 交付后，前端只改 `app/src/api.js` 里的 `API_BASE` 一个常量，业务代码一行不动。**
 
-## 五、全队统一：宠物形象是**仓鼠**
+⚠️ 给 B 的三条硬要求：
 
-任务卡里的「小芽」**已作废**，以本仓库 `A/pet-assets/` 为准。
+1. **`mock-server/engine.js` 直接复用，别重写** —— 否则前端一套算法、后端一套算法，现场两套结果不一致
+2. **`/api/today` 必须带 `gap` 缺口行** —— RK-08 是全场最高风险（16 分）；`owed = 0` 时缺口行消失，防法失效
+3. **seed 已按 45 天造** —— 任务卡写的是 30 天，但记忆屏要引用「41 天前说的话」，30 天覆盖不到 41 天前，记忆屏会自相矛盾
 
-五态：`元气`(yuanqi) · `踏实`(tashi) · `疲惫`(pibei) · `蔫了`(nianle) · `休眠`(xiumian)
+路演主演示图 → `A-module-frontend/test-images/test5.jpg`（10 张里唯一不带 `OLD_SCREENSHOT` 黄条的）
 
-CDN 引用（打 tag 后生效）：
+详细文档 → **[`A-module-frontend/README.md`](A-module-frontend/README.md)**
 
-```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/casperzhang1-hue/2026.10_Suzhou_Hackthon@v1.0.0/A/pet-assets/hamster.css">
-<div class="hamster" data-state="yuanqi" style="--hamster-size:240px"></div>
-<script src="https://cdn.jsdelivr.net/gh/casperzhang1-hue/2026.10_Suzhou_Hackthon@v1.0.0/A/pet-assets/hamster.js"></script>
+## 目录结构
+
+```
+2026.10_Suzhou_Hackthon/
+├── README.md                    ← 本文件（仓库总览）
+├── GIT_使用指南.md              ← 四人 Git 工作流 + 回退手册（每人必读，5 分钟）
+├── docs/                        ← PRD v1.1 / 验收清单 / 四人任务卡 / 完整方案
+├── prototype/                   ← SVG 版原型 Demo（历史参考）
+├── A-module-frontend/           ← A：Vue 工程 + 仓鼠素材 + mock 服务 + seed + 接口契约（→ 目录内 README.md）
+├── C-module-recognition/        ← C：AI 学习截图识别（负责人：Nina）
+├── B-module-backend/            ← B：接口与状态引擎（当前唯一阻塞，README 里有三个 P0）
+├── D-module-materials/          ← D：seed / 逐字稿 / pitch
+└── handoff-snapshot-1300/       ← 13:00 A+C 联调成果冻结快照（只读基线，谁都不许改）
 ```
 
----
+## 版本管理纪律（细则见 GIT_使用指南.md）
 
-## 六、时间线（任务卡）
+- **所有人直接提交 main**（目录隔离 → 零冲突），提交信息格式：`人名: 干了什么`
+- **小步提交**：每完成一个功能就 commit，至少每 40 分钟一次——commit 是存档点，不是作品
+- **Tag 存档点**（过一道闸门打一个）：`v0-baseline` ✅ → `g2-pass` → `g3-pass` → `g4-frozen` → `final`
+- 出问题回退：`git reset --hard g3-pass` 一秒回到存档点；已推送的用 `git revert`
+- ❌ **严禁 force push** ｜ ❌ 不要动别人的目录 ｜ ❌ 不要提交密钥和 node_modules
 
-| 时间 | 事项 | 状态 |
-|---|---|---|
-| ~~23:00~~ | B 出 schema | ⚠️ 逾期，已被 A+C 协商出的契约绕过 |
-| ~~24:00~~ | D 出 seed | ⚠️ 逾期，A 已造 45 天兜底版 |
-| 16:00 | 五步动线一遍过 | 待 B |
-| 18:00 | 视觉统一 + 冻结 | 待 B |
-| 23:00 | C 复验 API 额度 | 待 C |
+## 参赛信息
 
----
-
-## 七、已知风险（写在前面，别等评委问）
-
-- **RK-08 缺口行（16 分，全场最高）**：`GET /api/today` 必须返回 `gap`（本周目标/已完成/欠几次）。`owed=0` 时缺口行会消失，防法失效。契约里已写死。
-- **识别结果会波动**：同一张图两次跑可能出 `normal` 和 `excellent`。**没有必成图**，路演话术统一成「AI 识别允许误差，所以确认卡可改」——把缺陷讲成设计。
-- **测试图带黄条**：10 张里 8 张超 36 小时阈值触发 `OLD_SCREENSHOT`。路演主演示图用 `test-images/test5.jpg`，或 D 当天现截一张。
+- 时间：2026-10-31 ｜ 地点：苏州黑客松
+- 阶段：联调（11:30 起）→ G3 五步动线 16:00 → 代码冻结 18:00 → 故障演练 20:00 → 路演 22:16 前

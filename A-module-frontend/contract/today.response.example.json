@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-31",
+  "has_record": true,
+  "pet_state": "tired",
+  "vitality": 81,
+  "user_state": "过载",
+  "phrase_level": "low",
+  "gap": {
+    "week_target": 5,
+    "week_done": 4,
+    "owed": 1
+  },
+  "detail": {
+    "duration_minutes": 210,
+    "accuracy": 0.55,
+    "energy": 35,
+    "progress": 55,
+    "completion": 1.2,
+    "late_night": true
+  }
+}

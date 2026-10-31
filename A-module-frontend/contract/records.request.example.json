@@ -1,0 +1,27 @@
+{
+  "record": {
+    "event_date": "2026-10-31",
+    "event_time": "20:30",
+    "duration_minutes": 115,
+    "source_app": "粉笔",
+    "modules": [
+      {
+        "name": "资料分析",
+        "question_count": 135,
+        "correct_count": 109
+      }
+    ],
+    "total_questions": 135,
+    "accuracy": 0.81
+  },
+  "recognition_ref": {
+    "schema_version": "1.1",
+    "recognized_at": "2026-10-31T05:20:00.000Z",
+    "confidence": 0.88
+  },
+  "edited_fields": [
+    "duration_minutes"
+  ],
+  "confirmed_at": "2026-10-31T05:20:31.000Z",
+  "user_id": "demo_zhang"
+}
