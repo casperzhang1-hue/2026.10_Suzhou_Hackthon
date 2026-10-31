@@ -569,3 +569,23 @@ def test_问账重问要给数据模式里成立的换法():
             {"role": "assistant", "content": "今天 130 分钟，正确率 60%。"}]
     last = P.build_messages("今天怎么样", facts=facts, history=hist)[-1]["content"]
     assert "换个语序" in last and "优先于上面" in last and "数字一个都不许改" in last
+
+
+def test_问账重问_三本账各有各的换法():
+    """「这周还差几天」里没有正确率，笼统说「先说正确率」会把这一支带沟里。
+    实测它懵了，两次照抄，掉兜底。"""
+    week = _facts("这周还差几天")
+    hist = [{"role": "user", "content": "这周还差几天"},
+            {"role": "assistant", "content": "这周 4 天了，还差 1 天。"}]
+    last = P.build_messages("这周还差几天", facts=week, history=hist)[-1]["content"]
+    assert "先说还差几天" in last and "正确率" not in last.split("这是他刚问过的")[-1]
+
+
+def test_问账重问_三本账各有各的换法():
+    """「这周还差几天」里没有正确率，笼统说「先说正确率」会把这一支带沟里。
+    实测它懵了，两次照抄，掉兜底。"""
+    week = _facts("这周还差几天")
+    hist = [{"role": "user", "content": "这周还差几天"},
+            {"role": "assistant", "content": "这周 4 天了，还差 1 天。"}]
+    last = P.build_messages("这周还差几天", facts=week, history=hist)[-1]["content"]
+    assert "先说还差几天" in last and "正确率" not in last.split("这是他刚问过的")[-1]
