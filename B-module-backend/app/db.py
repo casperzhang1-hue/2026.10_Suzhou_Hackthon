@@ -45,6 +45,34 @@ CREATE TABLE IF NOT EXISTS memories (
     question      TEXT,
     payload       TEXT
 );
+
+-- 他说过的每一句话都落库。之前只存在页面内存里，刷新就没，
+-- 于是「记得」只能靠 prompt 里那三条种子撑着。
+CREATE TABLE IF NOT EXISTS chat_turns (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    TEXT NOT NULL DEFAULT 'demo_zhang',
+    role       TEXT NOT NULL,              -- user / assistant
+    content    TEXT NOT NULL,
+    source     TEXT,                       -- model / fallback / template
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_turns(user_id, id);
+
+-- 他给我看的每一张图。宠物说过什么、认出了什么，都在这里留证。
+-- 没有这张表，它就只能"猜"他刚做了什么——也就是这次翻车的直接原因。
+CREATE TABLE IF NOT EXISTS uploads (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL DEFAULT 'demo_zhang',
+    image_name TEXT,
+    image_sha  TEXT,
+    said       TEXT,                       -- 它看完说的那一句
+    seen       TEXT,                       -- 它从图里读到的结构化内容（JSON）
+    record_id  TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_uploads_user ON uploads(user_id, created_at);
 """
 
 RECORD_COLUMNS = (
@@ -132,6 +160,80 @@ def load_memories(conn: sqlite3.Connection) -> list[dict]:
         item = {k: v for k, v in dict(r).items() if k not in ("payload", "user_id") and v is not None}
         items.append(item)
     return items
+
+
+def insert_memory(conn: sqlite3.Connection, item: dict) -> None:
+    """写一条记忆。payload 存整条 JSON，拆出来的列只为查询方便。
+
+    ``days_ago`` 由调用方给（0 = 今天说的）。缺了它，41 天前和刚才对它是一回事。
+    """
+    conn.execute(
+        "INSERT OR REPLACE INTO memories (id,user_id,type,days_ago,said_at,quote,module,"
+        "then_accuracy,week_accuracy,question,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            item.get("id"),
+            item.get("user_id") or "demo_zhang",
+            item.get("type"),
+            item.get("days_ago"),
+            item.get("said_at"),
+            item.get("quote"),
+            item.get("module"),
+            item.get("then_accuracy"),
+            item.get("week_accuracy"),
+            item.get("question"),
+            json.dumps(item, ensure_ascii=False),
+        ),
+    )
+    conn.commit()
+
+
+def append_chat(conn: sqlite3.Connection, *, user_id: str, role: str,
+                content: str, source: str | None = None) -> None:
+    conn.execute(
+        "INSERT INTO chat_turns (user_id, role, content, source) VALUES (?,?,?,?)",
+        (user_id or "demo_zhang", role, content or "", source),
+    )
+    conn.commit()
+
+
+def load_chat(conn: sqlite3.Connection, *, user_id: str = "demo_zhang", limit: int = 12) -> list[dict]:
+    """最近几轮对话，按时间正序返回（越靠后越新），直接可以喂给模型。"""
+    rows = conn.execute(
+        "SELECT role, content FROM chat_turns WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+        (user_id or "demo_zhang", limit),
+    ).fetchall()
+    return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+
+
+def insert_upload(conn: sqlite3.Connection, item: dict) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO uploads (id,user_id,image_name,image_sha,said,seen,record_id,created_at)"
+        " VALUES (?,?,?,?,?,?,?,COALESCE(?,datetime('now')))",
+        (
+            item.get("id"),
+            item.get("user_id") or "demo_zhang",
+            item.get("image_name"),
+            item.get("image_sha"),
+            item.get("said"),
+            _as_json(item.get("seen")),
+            item.get("record_id"),
+            item.get("created_at"),
+        ),
+    )
+    conn.commit()
+
+
+def load_uploads(conn: sqlite3.Connection, *, user_id: str = "demo_zhang", limit: int = 5) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM uploads WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?",
+        (user_id or "demo_zhang", limit),
+    ).fetchall()
+    out = []
+    for r in rows:
+        item = dict(r)
+        item["seen"] = json.loads(item["seen"]) if item.get("seen") else None
+        out.append(item)
+    return out
 
 
 def import_seed(conn: sqlite3.Connection, seed_path: Path) -> int:
@@ -228,7 +330,7 @@ def db_overview(conn: sqlite3.Connection) -> dict:
     last = conn.execute("SELECT MAX(event_date) FROM records").fetchone()[0]
     return {
         "engine": "sqlite3",
-        "tables": ["records", "memories"],
+        "tables": ["records", "memories", "chat_turns", "uploads"],
         "records": records,
         "memories": memories,
         "days": days,

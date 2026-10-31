@@ -50,3 +50,27 @@ class SayIn(BaseModel):
     text: str = Field(min_length=1, max_length=300)
     history: list[dict] = []
     user_id: str = "demo_zhang"
+
+
+class MemoryIn(BaseModel):
+    """POST /api/memories：把他的一句话记下来。
+
+    这是「记忆管理」真正的写入口。之前库里的 3 条全是种子，他自己说的话
+    一条都没进去，所以它只能装作记得。
+    """
+    text: str = Field(min_length=1, max_length=300)
+    kind: str | None = None
+    user_id: str = "demo_zhang"
+
+
+class SeenIn(BaseModel):
+    """POST /api/pet/seen：他给我看一张图，我真的看。
+
+    ``image`` 收 data URL 或裸 base64（前端两种都可能给）。
+    上限 ~8MB 的 base64，够一张手机截图；再大就是发错了。
+    """
+    image: str = Field(min_length=16, max_length=12_000_000)
+    image_name: str | None = None
+    record_id: str | None = None
+    user_id: str = "demo_zhang"
+    speak: bool = True

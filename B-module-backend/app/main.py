@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from datetime import date
@@ -6,8 +7,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import db, pet_brain as brain, pet_chat as petchat, pet_llm, pet_persona as persona, service
-from .schemas import RecordIn, SayIn, VerifyIn
+from . import (
+    db, pet_brain as brain, pet_chat as petchat, pet_llm, pet_memory as petmem,
+    pet_persona as persona, pet_vision, service,
+)
+from .schemas import MemoryIn, RecordIn, SayIn, SeenIn, VerifyIn
 from .store import Store
 
 # 必须在读 DATA_DIR 之前把 .env 灌进环境变量，否则 HAMSTER_* 会全部落回默认值
@@ -57,8 +61,33 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
         return service.today_view(store.records, get_today())
 
     @app.get("/api/memories")
-    def get_memories():
-        return {"items": store.memories}
+    def get_memories(user_id: str = "demo_zhang", with_views: bool = False):
+        """它记得的事。
+
+        默认返回原样契约（前端和测试都按 ``{"items": [...]}`` 断言）；
+        要给人看「这条是他说的还是我记的旁白」，加 ``?with_views=1``。
+        """
+        items = store.memories
+        out = {"items": items}
+        if with_views:
+            out["views"] = [persona._memory_view(m) for m in items]
+        return out
+
+    @app.post("/api/memories")
+    def post_memory(body: MemoryIn):
+        """把他的一句话记下来。这是记忆真正的写入口。
+
+        抽不出可记的内容时返回 saved=false，不硬塞一条垃圾进库。
+        """
+        with store.db.lock:
+            modules = db.module_stats(store.db.conn)
+        item = petmem.remember(
+            store, body.text, user_id=body.user_id,
+            known_modules=[m["module"] for m in modules], kind=body.kind,
+        )
+        if not item:
+            return {"ok": True, "saved": False, "reason": "这句话里没有值得记的事"}
+        return {"ok": True, "saved": True, "memory": persona._memory_view(item)}
 
     # ---- 数据库能力（SQL 聚合，不是内存遍历） ----
     @app.get("/api/health")
@@ -135,7 +164,7 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
     def pet_say(body: SayIn):
         """他说一句话，团团回一句。
 
-        链路：召回记忆 → 拼事实包 → 模型措辞 → 洗格式 → 过闸 → 上屏。
+        链路：落库他的话 → 抽记忆 → 召回 → 拼事实包 → 模型措辞 → 洗格式 → 过闸 → 上屏。
         任何一步失败都退到 ``persona.fallback``：宁可笨，不可假。
         返回 200 而不是 5xx —— 前端不需要区分"模型挂了"和"模型说了不该说的"，
         它只需要一句能显示的话和一个来源标签。
@@ -145,6 +174,7 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
         today = service.today_view(store.records, get_today())
         with store.db.lock:
             modules = db.module_stats(store.db.conn)
+        known_modules = [m["module"] for m in modules]
 
         out = {
             "ok": True,
@@ -154,10 +184,22 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             "guard": {"ok": False, "reason": ""},
             "facts": {},
             "text": "",
+            "remembered": None,
             "ms": 0,
         }
+
+        # 他说的话先落库，再抽一条记忆。顺序不能反：先落库，崩了也不丢他的话。
+        if text:
+            store.add_chat(user_id=body.user_id, role="user", content=text)
+            item = petmem.remember(store, text, user_id=body.user_id, known_modules=known_modules)
+            if item:
+                out["remembered"] = petmem.view(item)
+
+        # 历史优先用库里的：页面刷新不该让它忘掉刚才聊了什么
+        history = body.history or store.chat_history(user_id=body.user_id, limit=10)
         facts = persona.build_facts(
-            today=today, modules=modules, memories=store.memories, text=text
+            today=today, modules=modules, memories=store.memories, text=text,
+            uploads=store.uploads(user_id=body.user_id),
         )
         out["facts"] = facts
 
@@ -167,10 +209,11 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             return out
 
         try:
-            messages = persona.build_messages(text, facts=facts, history=body.history)
+            messages = persona.build_messages(text, facts=facts, history=history)
             raw = pet_llm.chat(messages, temperature=0.85)
             reply = persona.sanitize(raw)
-            passed, reason = persona.check_reply(reply, facts=facts, user_text=text)
+            passed, reason = persona.check_reply(reply, facts=facts, user_text=text,
+                                                 known_modules=known_modules)
 
             if not passed:
                 # 第一次被拦，把「哪句不行」喂回去让它自己改——只重试一次，
@@ -178,7 +221,8 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
                 print(f"[pet_say] 第一次被拦：{reason} | 原文：{reply[:60]}")
                 raw2 = pet_llm.chat(persona.retry_messages(messages, reply, reason), temperature=0.95)
                 reply2 = persona.sanitize(raw2)
-                passed2, reason2 = persona.check_reply(reply2, facts=facts, user_text=text)
+                passed2, reason2 = persona.check_reply(reply2, facts=facts, user_text=text,
+                                                       known_modules=known_modules)
                 if passed2:
                     reply, passed, reason = reply2, True, ""
                 else:
@@ -199,6 +243,96 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             print(f"[pet_say] 拦下模型回答：{reason} | 原文：{reply[:80]}")
             out["guard"] = {"ok": False, "reason": reason}
             out["text"] = persona.fallback(text)
+
+        store.add_chat(user_id=body.user_id, role="assistant", content=out["text"],
+                       source=out["source"])
+        out["ms"] = int((time.time() - t0) * 1000)
+        return out
+
+    @app.post("/api/pet/seen")
+    def pet_seen(body: SeenIn):
+        """他传了一张图，团团真的看一眼，然后说一句它看到了什么。
+
+        这是「连我上传的图片做了什么都不知道」的正面回答：
+        看之前不知道，看之后说得出科目、题量、对错、时长——
+        而且说的每一个数都能在 ``seen`` 里对上。看不清就说看不清，不猜。
+
+        同一张图（sha256 相同）不重复看、不重复记：重复上传会把时长累加成假数。
+        """
+        t0 = time.time()
+        raw = pet_vision._decode(body.image)
+        if not raw:
+            return {"ok": False, "reason": "图片解不开", "text": "", "seen": None, "ms": 0}
+
+        sha = pet_vision.fingerprint(raw)
+        for old in store.uploads(user_id=body.user_id, limit=20):
+            if old.get("image_sha") == sha:
+                return {
+                    "ok": True, "cached": True, "seen": old.get("seen"),
+                    "text": old.get("said") or "这张我刚看过呀。",
+                    "model": None, "ms": int((time.time() - t0) * 1000),
+                }
+
+        looked = pet_vision.see(raw)
+        out = {
+            "ok": looked["ok"],
+            "cached": False,
+            "seen": looked["seen"],
+            "model": looked["model"],
+            "reason": looked.get("reason", ""),
+            "text": "",
+            "ms": 0,
+        }
+
+        if not looked["ok"]:
+            # 看不清就承认看不清。这句是设计过的兜底，不是故障话术。
+            out["text"] = "这张我有点看不清呀，你跟我说说今天做了啥？"
+            out["ms"] = int((time.time() - t0) * 1000)
+            return out
+
+        seen = looked["seen"]
+        brief = pet_vision.summary(seen)
+        said = ""
+        if body.speak:
+            facts = {
+                "mode": "look",
+                "what_i_just_saw": seen,
+                "sources": [{"what": brief, "from": "你刚传给我的那张图"}],
+            }
+            try:
+                msgs = [
+                    {"role": "system", "content": persona.PERSONA},
+                    {"role": "user", "content":
+                        "事实（只能用它，一个数都不许改）："
+                        + json.dumps(facts, ensure_ascii=False, separators=(",", ":"))
+                        + "\n\n他刚给你看了一张学习截图，你刚看完。用一句话说你看到了什么，"
+                          "30 字以内，别夸他，别编图里没有的东西。"},
+                ]
+                raw_reply = pet_llm.chat(msgs, temperature=0.7)
+                cand = persona.sanitize(raw_reply)
+                ok, why = persona.check_reply(cand, facts=facts, user_text="我传了张截图",
+                                              known_modules=[m["name"] for m in seen["modules"]])
+                if ok:
+                    said = cand
+                else:
+                    print(f"[pet_seen] 看图这句话被拦：{why} | 原文：{cand[:60]}")
+            except pet_llm.LLMError as e:
+                print(f"[pet_seen] 看图说话失败：{e}")
+
+        if not said:
+            # 兜底直接由抽取结果拼，不带任何形容词——它确实看到了这些
+            said = f"这张我看了，{brief}。"
+
+        store.add_upload({
+            "id": "up_" + sha[:10],
+            "user_id": body.user_id,
+            "image_name": body.image_name,
+            "image_sha": sha,
+            "said": said,
+            "seen": {**seen, "summary": brief},
+            "record_id": body.record_id,
+        })
+        out["text"] = said
         out["ms"] = int((time.time() - t0) * 1000)
         return out
 

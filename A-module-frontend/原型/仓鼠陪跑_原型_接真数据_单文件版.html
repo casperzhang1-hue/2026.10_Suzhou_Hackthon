@@ -299,7 +299,7 @@ b,strong{font-weight:600}
 .pchat-handle{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.16);margin:0 auto 14px}
 .pchat-title{font-size:16px;font-weight:600;letter-spacing:.01em}
 .pchat-sub{font-size:12px;color:var(--ink3);margin:3px 0 12px}
-.pchat-log{max-height:210px;overflow:auto;display:flex;flex-direction:column;gap:9px;padding:2px 0 10px;scrollbar-width:none;-ms-overflow-style:none}
+.pchat-log{max-height:236px;overflow:auto;display:flex;flex-direction:column;gap:9px;padding:2px 0 10px;scrollbar-width:none;-ms-overflow-style:none}
 .pchat-log::-webkit-scrollbar{display:none}
 .pchat-line{display:flex;flex-direction:column;max-width:87%}
 .pchat-line.me{align-self:flex-end;align-items:flex-end}
@@ -1247,6 +1247,9 @@ function addStreamLine(){
       m.className = 'pchat-meta';
       m.textContent = s;
       line.appendChild(m);
+      /* 来源标签是追加在气泡下面的：不补这一下滚动，它会被日志区的下沿裁掉半行，
+         屏幕上只剩「· qwen-flash」半截——正好把"这句话从哪来的"这件最要紧的事切没了。 */
+      petChatEls.log.scrollTop = petChatEls.log.scrollHeight;
     },
     drop: function(){ if(line.parentNode) line.parentNode.removeChild(line); }
   };
@@ -1319,6 +1322,9 @@ function petSay(text, intent){
       var meta = d.source === 'model'
         ? ((d.persona || '团团') + ' · ' + d.model)
         : '模型没接上，它凭记忆说';
+      /* 它这一轮真的把他的话记进库了，就在来源旁边标一下。
+         不标的话，「它有记性」这件事只有我看得到，他看不到。 */
+      if(d.remembered) meta += ' · 记下了';
       finish(d.text, meta);
     })
     .catch(function(e){
@@ -1515,6 +1521,92 @@ function petAfterSave(rec){
   t += '。';
   t += (APP.gap > 0) ? ('这周还欠 ' + APP.gap + ' 次。') : '这周清了。';
   petHomeAPI.say(t, 4600);
+}
+
+/* ---------- 让它真的看一眼这张图 ----------
+   之前图片只管进识别模块，宠物压根不知道有这回事，
+   于是「你怎么知道我做了这么久」只能编一句「我闻到你袖口有咖啡味」。
+   现在图片也进它的眼睛：压缩后发给后端，后端调视觉模型抽取，
+   它说出科目/题量/对错，而且每个数都能在 seen 里对上。
+   同一张图（sha256 相同）后端只认一次，不会把时长重复累加成假数。 */
+var PET_PENDING_IMAGE = { file:null, sha:null, url:null };
+
+function fileSha(file){
+  if(!(window.crypto && crypto.subtle && crypto.subtle.digest)) return Promise.resolve(null);
+  return file.arrayBuffer().then(function(buf){
+    return crypto.subtle.digest('SHA-256', buf);
+  }).then(function(digest){
+    var b = new Uint8Array(digest), out = '';
+    for(var i = 0; i < b.length; i++) out += ('0' + b[i].toString(16)).slice(-2);
+    return out.slice(0, 32);
+  }).catch(function(){ return null; });
+}
+
+/* 压缩到长边 900px、JPEG 0.82：一张手机截图 1.5MB → 150KB 上下，
+   视觉模型读得清字，又不至于把请求撑爆 */
+function compressImage(file, maxSide){
+  return new Promise(function(resolve){
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){
+      var w = img.naturalWidth, h = img.naturalHeight;
+      var k = Math.min(1, (maxSide || 900) / Math.max(w, h));
+      var cv = document.createElement('canvas');
+      cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      var dataUrl = cv.toDataURL('image/jpeg', 0.82);
+      URL.revokeObjectURL(url);
+      resolve(dataUrl);
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+/* 它看完图说的那句，进聊天气泡也进首页小气泡——关着面板也不会错过 */
+function petLookAtImage(recordId){
+  var pending = PET_PENDING_IMAGE;
+  if(!pending || !pending.file || !window.API || !API.online) return;
+  ensureChat();
+  compressImage(pending.file, 900).then(function(dataUrl){
+    if(!dataUrl) return null;
+    var typing = addTyping();
+    function dropTyping(){ if(typing && typing.parentNode) typing.parentNode.removeChild(typing); }
+    return fetch(apiUrl('/api/pet/seen'), {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        image: dataUrl,
+        image_name: pending.file.name || null,
+        record_id: recordId || null,
+        user_id:'demo_zhang'
+      }),
+      cache:'no-store'
+    }).then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(d){
+      dropTyping();
+      if(!d || !d.text) return null;
+      var meta = d.cached ? '这张刚看过'
+        : (d.ok ? ('看图 · ' + (d.model || '视觉')) : '没看清');
+      var line = addStreamLine();
+      petTypeOut(line, d.text, function(){ line.meta(meta); });
+      PET_HISTORY.push({role:'assistant', content:d.text});
+      PET_HISTORY = PET_HISTORY.slice(-8);
+      if(petHomeAPI) petHomeAPI.say(d.text, 5200);
+      return d;
+    }).catch(function(e){
+      dropTyping();               /* 失败也要把「……」收掉，否则面板里永远悬着一个空气泡 */
+      throw e;
+    });
+  }).catch(function(e){
+    console.warn('[pet] 看图失败：' + (e && e.message));
+  }).then(function(){
+    PET_PENDING_IMAGE = { file:null, sha:null, url:null };
+  });
 }
 
 function renderHome(){
@@ -1832,6 +1924,11 @@ function startRealRecognize(file){
     showToast('recognize.js 没加载，先用上面的演示样本');
     return;
   }
+  /* 留住这张图：确认入库之后要让它自己看一眼。
+     sha 用来挡住"同一张图传两遍"——重复入库会把时长累加成假数，
+     而它只会老实把那个假数念出来，看着就像它在编。 */
+  PET_PENDING_IMAGE = { file: file, sha: null, url: null };
+  fileSha(file).then(function(h){ if(h) PET_PENDING_IMAGE.sha = h; });
   var url = URL.createObjectURL(file);
   var css = 'width:100%;height:100%;object-fit:cover;border-radius:10px';
   var img = document.createElement('img'); img.src = url; img.style.cssText = css;
@@ -2036,7 +2133,13 @@ function postRecordAndRefresh(p){
       total_questions: p.total || 0,
       accuracy: (typeof p.accuracy === 'number') ? Math.round(p.accuracy * 100) / 100 : null
     },
-    recognition_ref: rec ? {schema_version: rec.schema_version || '1.1', confidence: 0.9} : null,
+    recognition_ref: rec ? {
+      schema_version: rec.schema_version || '1.1',
+      confidence: 0.9,
+      /* 图指纹：后端靠它判「同一张图」。没有它就只剩 120 秒窗口，
+         跨小时的重复上传会各自入库，今日时长直接翻几倍。 */
+      image_sha: PET_PENDING_IMAGE.sha || null
+    } : null,
     edited_fields: [],
     confirmed_at: new Date().toISOString(),
     user_id: 'demo_zhang'
@@ -2056,6 +2159,7 @@ function postRecordAndRefresh(p){
     showDbBadge('SQLite 已连接 · ' + (API.info ? API.info.records : '?') + ' 条记录 · 刚记下');
     return syncFromServer().then(function(){
       petAfterSave(body.record);   /* 入库成功它才开口，数字取自这条记录 */
+      petLookAtImage(res.record_id);   /* 然后它真的看一眼这张图，说自己看到了什么 */
       return null;
     });
   }).catch(function(e){

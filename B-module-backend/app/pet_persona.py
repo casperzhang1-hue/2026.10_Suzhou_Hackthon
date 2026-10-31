@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 
 from . import pet_brain as brain
+from . import pet_memory
 
 NAME = "团团"
 
@@ -47,10 +48,21 @@ PERSONA = f"""你是「{NAME}」，一只住在书桌角上的仓鼠，陪一个
 - 不要提「数据」「模型」「系统」「事实」这些词，你是仓鼠，不是程序。
 
 【你记得的事】
-- 他说过的话都在 facts 里。可以提，但要软，别像在念账本；他不问就别主动翻旧账。
-- 提旧事要带上他原话里最关键的那几个字，不要只说「那句话」「那件事」——
-  说得出原话，他才觉得你真的记得。
+- 他说过的话在 facts.memories 里，每条都带 `who`：
+  - `who` 是「他」= 他亲口说的原话，可以说「你说过……」
+  - `who` 是「旁白」= 你自己给他记的一笔账，只能说「我记得你……」，**不许**说「你说过」
+- 可以提，但要软，别像在念账本；他不问就别主动翻旧账。
+- 提旧事要带上他原话里最关键的那几个字，说得出原话，他才觉得你真的记得。
 - 记得的人是你。说「我记得你说的……」，不要说「你记得……」。
+
+【你从哪知道的——这条最要紧】
+- 你只有屏幕这一小块地方。你看不见他的人，听不见他的声音，闻不到他身上的味道。
+- 你**绝对不许**说自己闻到了什么、摸到了什么、看见他眼皮/黑眼圈/咬着笔头。
+  这类话说出去，他知道你在编，你说什么他都不会再信。
+- facts.sources 里写着你每件事的出处，只有这几种说法能用：
+  「你刚给我看的那张图」「你自己跟我说的」「你确认过的那条记录」。
+- 他问「你怎么知道」时，直接说出处，别绕弯子。没记下就说没记下。
+- facts 里没有的事，就是不知道。说「我记不清了」比编一句强一百倍。
 
 【你自己】
 - 你也有情绪：会困、会嘴馋、会把瓜子藏进腮帮子、会怕他哪天不来了。
@@ -84,6 +96,39 @@ _BANNED_ROLE = ("你记得那句", "你记得那件", "你记得那晚", "你记
 
 # 第三人称 = 角色崩了。它是在跟他说话，不是在背后讲他
 _THIRD_PERSON = re.compile(r"[他她]的|[他她]说|[他她]今天|[他她]已经")
+
+# 「编出来的身体证据」——这是这次翻车的直接死因。
+# 实测原话：「我闻到你袖口有咖啡味，还摸到你手心冒汗。」
+# 「你今天做了 154 分钟，我看见你眼皮都快粘住了呀，你咬着笔头想了好久。」
+# 它只有一块屏幕，闻不到也摸不到。这类话听着最像"真有人在乎你"，
+# 但一旦被追问「你怎么知道」，整只宠物就塌了——所以必须在出口拦死。
+_SENSORY = re.compile(
+    r"闻到|闻见|香味|咖啡味|摸到|手心|袖口|眼皮|黑眼圈|眼睛都|揉眼睛|打哈欠|"
+    r"听见你|听到你|盯着你|看着你|看见你|看到你|你身上的|咬着笔|笔头|"
+    r"我看见你|我看到你|我瞅见你"
+)
+
+# 「看见你发的图」是被允许的：他确实给了图。只有「看见你本人」才算编。
+_SENSORY_OK_NEXT = ("发", "传", "给", "这", "那", "的")
+
+# 公考模块白名单词表。库里没有的模块名，一个字都不许说——
+# 实测它把「判断推理」的一天说成了「那道数量关系的题」，题是真的，科目是编的。
+_MODULE_VOCAB = (
+    "数量关系", "资料分析", "判断推理", "言语理解", "常识判断", "申论",
+    "图形推理", "定义判断", "类比推理", "逻辑判断", "数学运算", "资料汇总",
+)
+
+# 他问「你怎么知道」时，回答里必须出现出处词，否则就是在糊弄
+_PROVENANCE_ASK = ("你怎么知道", "你咋知道", "你凭什么", "怎么知道的", "谁告诉你的",
+                   "你哪知道", "你咋晓得", "你怎么晓得", "哪来的")
+_PROVENANCE_WORDS = ("图", "截图", "照片", "记录", "你说", "跟我讲", "告诉我", "传", "发我",
+                     "记下", "记着", "记在", "你自己")
+
+# 提到「图」就算在引用证据。引用必须引得出——说得出图里的数、科目，
+# 或者「上面写着」这种转述，否则就是凭想象补画面。
+# 实测原话：「我拱你一下，你那天学到凌晨两点，小灯还亮着呢。」——图里根本没有小灯。
+_CITES_IMAGE = ("图", "截图", "照片", "画面上", "屏幕上")
+_CITE_MARKERS = ("写着", "记着", "记录", "上面", "标着", "显示")
 
 _EMOJI = re.compile(
     "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF\u2190-\u21FF\u2B00-\u2BFF\uFE0F]"
@@ -164,6 +209,9 @@ def recall(text: str, memories: list[dict], modules: list[dict] | None = None, l
             score += 2.0 if soft else 0
         if mod and mod in module_names and mod in q:
             score += 0.5
+        # 他亲口说过的话，比系统旁白更该被想起来——旁白是账本，原话才是交情
+        if m.get("source") == "user":
+            score += 1.2
         if score > 0:
             scored.append((score, m))
 
@@ -176,9 +224,15 @@ def recall(text: str, memories: list[dict], modules: list[dict] | None = None, l
 
 
 def _memory_view(m: dict) -> dict:
-    view = {"kind": m.get("type"), "days_ago": m.get("days_ago"), "quote": m.get("quote")}
-    if m.get("module"):
-        view["module"] = m["module"]
+    """记忆的统一形状。``who`` 标明这条是他亲口说的，还是我给他记的旁白。
+
+    这一格之前是缺的，代价很大：seed 里 quote 写的是「那天你学到凌晨两点」——
+    那是系统摘要，不是他的原话。模型读到了，就回「你上次说『学到凌晨两点』」。
+    旁白当原话用，是最容易被当事人当场识破的一种假。
+    """
+    view = pet_memory.view(m)
+    if m.get("days_ago") is not None:
+        view["days_ago"] = m["days_ago"]          # 数字白名单要用，别删
     for key, out in (("then_accuracy", "accuracy_when_promised_pct"), ("week_accuracy", "accuracy_this_week_pct")):
         pct = brain._pct(m.get(key))
         if pct is not None:
@@ -188,7 +242,29 @@ def _memory_view(m: dict) -> dict:
     return view
 
 
-def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text: str) -> dict:
+def _sources(today: dict, uploads: list[dict] | None, recalled: list[dict]) -> list[dict]:
+    """每件事的出处。这是他问「你怎么知道」时，它唯一可以指的东西。
+
+    刻意不带时刻（「20:41」里的数字会污染白名单），只说「你刚传的那张图」。
+    """
+    out: list[dict] = []
+    for u in (uploads or []):
+        seen = (u.get("seen") or {}) if isinstance(u.get("seen"), dict) else {}
+        out.append({
+            "what": seen.get("summary") or u.get("said") or "一张学习截图",
+            "from": "你刚传给我的那张图",
+            "kind": "upload",
+        })
+    if (today or {}).get("has_record"):
+        out.append({"what": "今天的学习记录", "from": "你确认过的那条记录", "kind": "record"})
+    for m in recalled:
+        if m.get("source") == "user":
+            out.append({"what": m.get("quote"), "from": "你自己跟我说的", "kind": "said"})
+    return out
+
+
+def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text: str,
+                uploads: list[dict] | None = None) -> dict:
     """闲聊用的事实包：比 pet_brain 的意图包更宽，但同样每个数字都带口径。
 
     有一条特殊分支：**他在难受时，事实包里一个数字都不放**。
@@ -198,19 +274,23 @@ def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text:
     """
     recalled = recall(text, memories, modules)
     pet_state = (today or {}).get("user_state")
+    sources = _sources(today, uploads, recalled)
 
     if looks_sad(text) and not _asks_for_data(text):
         return {
             "mode": "comfort",
             "pet_state": pet_state,
-            # 只留原话，不留 days_ago / 正确率——「41 天前」也是账本口气
-            "memories": [{"kind": m.get("type"), "quote": m.get("quote")} for m in recalled],
+            # 只留原话和「谁说的」，不留 days_ago / 正确率——「41 天前」也是账本口气。
+            # 也不放 sources：他难受的时候翻截图当证据，是把安慰说成了汇报。
+            # 只给一件：三件旧事一起上，它就会挨个念一遍，像在念稿。
+            "memories": [{"who": pet_memory.view(m)["who"], "text": m.get("quote")}
+                         for m in recalled[:1]],
         }
 
     detail = (today or {}).get("detail") or {}
     gap = (today or {}).get("gap") or {}
     facts = {
-        "mode": "normal",
+        "mode": "provenance" if _asks_how_know(text) else "normal",
         "today": {
             "recorded": bool((today or {}).get("has_record")),
             "minutes": int(detail.get("duration_minutes") or 0),
@@ -228,7 +308,21 @@ def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text:
             if (m.get("questions") or 0) >= brain.MIN_SAMPLE and m.get("accuracy") is not None
         ],
         "memories": [_memory_view(m) for m in recalled],
+        "sources": sources,
     }
+    # 他刚给我看的图里读到的数，要能被念出来。
+    # 只放在 sources[].what 的字符串里不行：白名单只认 int，
+    # 于是「判断推理 15 题、23 分钟」会被判成编造——真数据反被拦，比不拦更糟。
+    for u in (uploads or [])[:1]:
+        seen = (u.get("seen") or {}) if isinstance(u.get("seen"), dict) else {}
+        if seen:
+            facts["last_upload"] = {
+                "minutes": seen.get("minutes"),
+                "modules": [
+                    {"name": m.get("name"), "questions": m.get("questions"), "correct": m.get("correct")}
+                    for m in (seen.get("modules") or []) if isinstance(m, dict)
+                ],
+            }
     pool = facts["modules"]
     if pool:
         facts["weakest_module"] = min(pool, key=lambda m: m["accuracy_pct"])["name"]
@@ -241,7 +335,8 @@ def _user_numbers(text: str) -> set[int]:
     return {int(n) for n in re.findall(r"\d+", text or "")}
 
 
-def check_reply(text: str, *, facts: dict, user_text: str = "") -> tuple[bool, str]:
+def check_reply(text: str, *, facts: dict, user_text: str = "",
+                known_modules: list[str] | None = None) -> tuple[bool, str]:
     """上屏前的最后一道。返回 (能说?, 不能说的原因)。原因只进日志，不给用户看。"""
     if not text or not text.strip():
         return False, "空回答"
@@ -249,6 +344,52 @@ def check_reply(text: str, *, facts: dict, user_text: str = "") -> tuple[bool, s
     banned = [p for p in _BANNED_PHRASES if p in text]
     if banned:
         return False, f"说了堵情绪的话 {banned}"
+
+    # 编身体证据：这是最能骗到人、也最经不起追问的一种假
+    for m in _SENSORY.finditer(text):
+        word = m.group()
+        if word.endswith("你") and text[m.end():m.end() + 1] in _SENSORY_OK_NEXT:
+            continue                      # 「看到你发的图」是真的，放行
+        return False, f"编了身体上的证据「{word}」——它只有一块屏幕，闻不到也摸不到"
+
+    # 科目编造：库里没有的模块名一个字都不许说
+    known = set(known_modules or [])
+    if known:
+        invented = [n for n in _MODULE_VOCAB if n in text and n not in known]
+        if invented:
+            return False, f"说了库里没有的科目 {invented}"
+
+    # 他问「你怎么知道」，回答里必须有出处；说「我就是知道」等于没答
+    if _asks_how_know(user_text):
+        if not any(w in text for w in _PROVENANCE_WORDS):
+            return False, "他问你怎么知道，你却没说清出处"
+
+    # 引图必须引得出：数、科目、或者「上面写着」。
+    # 「图里小灯还亮着呢」这种画面细节，图里没有，就是它自己想的。
+    if any(w in text for w in _CITES_IMAGE):
+        if facts.get("mode") == "comfort":
+            return False, "他正难受，不该翻截图当证据"
+        up = facts.get("last_upload") or {}
+        if not up:
+            return False, "他没给过你图，你却提了图"
+        up_nums = {int(up["minutes"])} if up.get("minutes") is not None else set()
+        up_names = set()
+        for m in (up.get("modules") or []):
+            if m.get("name"):
+                up_names.add(m["name"])
+            for k in ("questions", "correct"):
+                if m.get(k) is not None:
+                    up_nums.add(int(m[k]))
+        said_nums = {int(n) for n in re.findall(r"\d+", text)}
+        if not (said_nums & up_nums or any(n in text for n in up_names)
+                or any(m in text for m in _CITE_MARKERS)):
+            return False, "提到了图，但说的内容图里没有"
+
+    # 把旁白当成他的原话：只有真的存在「他说的」记忆时，才允许说「你说过」
+    if re.search(r"你说过|你上次说|你跟我?说", text):
+        said_by_him = [m for m in (facts.get("memories") or []) if m.get("who") == "他"]
+        if not said_by_him:
+            return False, "把系统旁白当成了他的原话"
 
     # 他难过的时候报数字，是这只仓鼠最不该做的事——实测模型一定会犯，所以硬拦
     if looks_sad(user_text) and re.search(r"\d", text):
@@ -270,6 +411,9 @@ def check_reply(text: str, *, facts: dict, user_text: str = "") -> tuple[bool, s
         return False, "用了第三人称，角色崩了"
 
     allowed = set(brain.allowed_numbers(facts)) | _user_numbers(user_text)
+    # 出处摘要里也带数（「判断推理 15 题对 9 题」），那些同样是他给过我的
+    for src in (facts.get("sources") or []):
+        allowed |= {int(n) for n in re.findall(r"\d+", str(src.get("what") or ""))}
     stray = [int(n) for n in re.findall(r"\d+", text) if int(n) not in allowed]
     if stray:
         return False, f"出现事实里没有的数字 {stray}"
@@ -290,9 +434,22 @@ def build_messages(user_text: str, *, facts: dict, history: list[dict] | None = 
         if role in ("user", "assistant") and content:
             msgs.append({"role": role, "content": content[:200]})
     facts_json = __import__("json").dumps(facts, ensure_ascii=False, separators=(",", ":"))
+    hint = ""
+    if facts.get("mode") == "provenance":
+        hint = ("\n他现在在问你怎么知道的。照着 facts.sources 里的 from 说出处，"
+                "如果其中有「你刚传给我的那张图」，就先用它——他刚做完这件事，"
+                "你说得出图上的东西，比说「记录里有」可信得多。"
+                "哪件事就指哪一条，别拿「你自己说过」去答「你怎么知道我学了多久」。"
+                "一句话说完，别解释，别顺带夸他。")
+    elif facts.get("mode") == "comfort":
+        # 实测不提这一句，它会退成「你累啦，我听见了。」——安全，但像客服。
+        # 难受的时候要的是「这件事确实难」+ 一个具体的小动作，不是复述他的情绪。
+        hint = ("\n他现在难受。先认下这件事确实难，再给一个小动作（推瓜子、趴他手边、"
+                "拱他一下），20 到 40 个字。不要说「我听见了」这种空话，不要给办法。")
     msgs.append({
         "role": "user",
-        "content": f"事实（JSON，只能用这里面的数字）：{facts_json}\n\n他说：{user_text}",
+        "content": f"事实（JSON，只能用这里面的数字，sources 是你唯一能指的出处）：{facts_json}"
+                   f"{hint}\n\n他说：{user_text}",
     })
     return msgs
 
@@ -306,8 +463,8 @@ def retry_messages(messages: list[dict], rejected: str, reason: str) -> list[dic
     """
     return list(messages) + [
         {"role": "assistant", "content": rejected},
-        {"role": "user", "content": f"你刚才那句话说错了：{reason}。他这会儿不需要任何数字，"
-                                    f"只要一句人能听懂的安慰，20 字以内，只用「你」。"},
+        {"role": "user", "content": f"你刚才那句话说错了：{reason}。重说一句，20 字以内，"
+                                    f"只用「你」，不许编你没看到、没听到的事。"},
     ]
 
 
@@ -321,6 +478,11 @@ _ASK_DATA = ("怎么样", "多少", "几道", "几题", "正确率", "成绩", "
 
 def _asks_for_data(text: str) -> bool:
     return any(w in (text or "") for w in _ASK_DATA)
+
+
+def _asks_how_know(text: str) -> bool:
+    """他在问「你凭什么知道」。这时候要的是出处，不是安慰，也不是数字。"""
+    return any(w in (text or "") for w in _PROVENANCE_ASK)
 
 
 _FALLBACK_SAD = [
@@ -337,6 +499,11 @@ _FALLBACK_NORMAL = [
     "唔，我听着呢，你慢慢说。",
     "瓜子刚剥好，你接着讲。",
 ]
+# 被问「你怎么知道」时的兜底：宁可不提数字，也不能瞎猜一个来源
+_FALLBACK_HOW = [
+    "我知道的都是你告诉我的、还有你传给我看的那点东西。",
+    "我没看见别的，就知道你跟我说的那些。",
+]
 
 
 def fallback(user_text: str) -> str:
@@ -344,7 +511,9 @@ def fallback(user_text: str) -> str:
 
     这些句子一个数字都不带 —— 笨可以，假不行。
     """
-    if any(w in (user_text or "") for w in _MEMORY_WORDS):
+    if _asks_how_know(user_text):
+        pool = _FALLBACK_HOW
+    elif any(w in (user_text or "") for w in _MEMORY_WORDS):
         pool = _FALLBACK_ASK_MEMORY
     elif looks_sad(user_text):
         pool = _FALLBACK_SAD
