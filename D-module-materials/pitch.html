@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>监督小宠 · 路演 8 页</title>
+<style>
+  :root{
+    --ink:#241C14;
+    --ink-2:#5B4B3A;
+    --paper:#FBF7F0;
+    --amber:#C0741F;
+    --amber-soft:#EFD9BC;
+    --line:#E3D7C6;
+    --night:#1C1610;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#0E0B08;overflow:hidden}
+  body{
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  .deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:none;
+    flex-direction:column;
+    justify-content:center;
+    padding:7vh 8vw;
+    background:var(--paper);
+  }
+  .slide.on{display:flex}
+  .slide.dark{background:var(--night);color:#F4EDE1}
+
+  /* 通用排版 */
+  .kicker{
+    font-size:1.5vw;letter-spacing:.28em;color:var(--amber);
+    font-weight:600;margin-bottom:2.6vh;
+  }
+  .dark .kicker{color:var(--amber-soft)}
+  h1{font-size:6.4vw;line-height:1.08;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:4.2vw;line-height:1.18;font-weight:800;letter-spacing:-.015em}
+  h3{font-size:2.5vw;line-height:1.4;font-weight:700;color:var(--ink-2)}
+  p.lead{font-size:2.35vw;line-height:1.62;color:var(--ink-2);margin-top:3vh;max-width:62vw}
+  .dark p.lead{color:#C9BBA6}
+  .rule{height:2px;background:var(--line);width:9vw;margin:3.4vh 0}
+  .dark .rule{background:#3A2E22}
+
+  /* 封面 */
+  .cover h1{margin-bottom:2.4vh}
+  .cover .sub{font-size:2.1vw;color:var(--ink-2);line-height:1.7}
+  .tagline{
+    margin-top:5vh;padding-left:2.2vw;border-left:5px solid var(--amber);
+    font-size:2.5vw;font-weight:700;line-height:1.5;
+  }
+  .cover .meta{
+    position:absolute;left:8vw;bottom:6vh;font-size:1.35vw;color:#9A8A76;letter-spacing:.06em;
+  }
+
+  /* 列表块 */
+  .rows{display:flex;flex-direction:column;gap:2.4vh;margin-top:5vh}
+  .row{display:flex;gap:2.2vw;align-items:baseline}
+  .row .n{
+    font-size:1.5vw;font-weight:800;color:var(--amber);
+    min-width:3vw;padding-top:.4vh;letter-spacing:.05em;
+  }
+  .row .t{font-size:2.15vw;line-height:1.5}
+  .row .t b{font-weight:800}
+  .row .t span{color:var(--ink-2)}
+
+  /* 流程 */
+  .flow{display:flex;align-items:stretch;gap:1.2vw;margin-top:6vh}
+  .step{
+    flex:1;background:#fff;border:1.5px solid var(--line);border-radius:14px;
+    padding:2.6vh 1.6vw;display:flex;flex-direction:column;justify-content:space-between;
+    min-height:23vh;
+  }
+  .step .num{font-size:1.25vw;font-weight:700;color:var(--amber);letter-spacing:.1em}
+  .step .name{font-size:2vw;font-weight:800;line-height:1.3;margin-top:1.6vh}
+  .step .note{font-size:1.35vw;color:#8A7A66;line-height:1.5;margin-top:1.4vh}
+  .step.key{background:var(--ink);border-color:var(--ink);color:#FBF7F0}
+  .step.key .num{color:var(--amber-soft)}
+  .step.key .note{color:#B7A791}
+
+  /* 缺口行特写 */
+  .gapbox{
+    margin-top:6vh;background:#fff;border:2px solid var(--ink);border-radius:18px;
+    padding:5vh 3vw;display:flex;align-items:center;justify-content:center;gap:3.4vw;
+  }
+  .gapbox .cell{text-align:center}
+  .gapbox .k{font-size:1.45vw;color:#8A7A66;letter-spacing:.08em;margin-bottom:1.4vh}
+  .gapbox .v{font-size:4.6vw;font-weight:800;line-height:1}
+  .gapbox .v.alert{color:var(--amber)}
+  .gapbox .div{width:1.5px;height:9vh;background:var(--line)}
+  .gapnote{font-size:1.9vw;color:var(--ink-2);margin-top:4vh;line-height:1.6}
+
+  /* 记忆页 */
+  .memo{display:flex;gap:4vw;align-items:center;margin-top:5vh}
+  .memo .col{flex:1}
+  .quote{
+    font-size:3.2vw;font-weight:800;line-height:1.42;
+    padding-left:1.8vw;border-left:5px solid var(--amber);
+  }
+  .quote small{display:block;font-size:1.45vw;font-weight:600;color:#A9987F;margin-top:1.6vh;letter-spacing:.05em}
+  .acc{display:flex;align-items:baseline;gap:1.6vw;margin-top:3.4vh;font-size:1.7vw;color:#C9BBA6}
+  .acc b{font-size:3.4vw;font-weight:800;color:#F4EDE1}
+  .acc b.down{color:#E08A3C}
+  .ask{
+    margin-top:5vh;font-size:2.6vw;font-weight:800;line-height:1.45;color:#F4EDE1;
+  }
+  .ask em{font-style:normal;color:var(--amber-soft)}
+
+  /* 底部技术条 */
+  .tech{
+    position:absolute;left:8vw;right:8vw;bottom:6vh;
+    border-top:1.5px solid var(--line);padding-top:2.2vh;
+    display:flex;gap:3.4vw;font-size:1.3vw;color:#8A7A66;
+  }
+  .dark .tech{border-color:#3A2E22;color:#8A7A66}
+  .tech b{color:var(--ink);font-weight:800}
+  .dark .tech b{color:#F4EDE1}
+
+  /* 收尾 */
+  .end h1{font-size:5.2vw;line-height:1.28}
+  .end .next{margin-top:6vh;display:flex;gap:2.6vw}
+  .end .next div{
+    flex:1;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:2.2vh 1.4vw;
+    font-size:1.35vw;line-height:1.55;color:var(--ink-2);
+  }
+  .end .next b{display:block;color:var(--ink);font-size:1.55vw;margin-bottom:.8vh}
+
+  /* 页码 */
+  .folio{
+    position:absolute;right:3.2vw;bottom:3.4vh;font-size:1.1vw;color:#B0A28E;letter-spacing:.14em;
+  }
+  .hint{
+    position:absolute;left:3.2vw;bottom:3.4vh;font-size:1.05vw;color:#C4B7A4;letter-spacing:.04em;
+  }
+
+  /* 打印：一页一张，横版 */
+  @page{size:1280px 720px;margin:0}
+  @media print{
+    html,body{overflow:visible;background:#fff}
+    .deck{position:static}
+    .slide{
+      position:relative;inset:auto;display:flex !important;
+      width:1280px;height:720px;
+      page-break-after:always;break-after:page;
+      padding:52px 62px;
+    }
+    .slide:last-child{page-break-after:auto}
+    .hint,.folio{display:none}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- 1 封面 -->
+  <section class="slide on cover">
+    <div class="kicker">2026.10 苏州黑客松</div>
+    <h1>监督小宠</h1>
+    <p class="sub">拍一张学习截图，看清你欠了多少。</p>
+    <div class="tagline">别人用规则督你，<br>我们用关系督你。</div>
+    <div class="meta">D · 张宇辰　｜　督学产品 · 情绪陪伴交付 · 长期记忆锁住</div>
+    <div class="hint">方向键 / 空格 翻页</div>
+    <div class="folio">01 / 08</div>
+  </section>
+
+  <!-- 2 问题 -->
+  <section class="slide">
+    <div class="kicker">问题</div>
+    <h2>督学这件事，<br>已经被行业做成了表演。</h2>
+    <div class="rows">
+      <div class="row"><div class="n">01</div><div class="t"><b>打卡群在表演自律</b><span>　—— 截图可以补，进度可以编</span></div></div>
+      <div class="row"><div class="n">02</div><div class="t"><b>学习 App 在表演数据</b><span>　—— 只统计，不判断，从不拦你</span></div></div>
+      <div class="row"><div class="n">03</div><div class="t"><b>AI 陪学在表演关心</b><span>　—— 你成功时出现，失败时消失</span></div></div>
+    </div>
+    <div class="folio">02 / 08</div>
+  </section>
+
+  <!-- 3 洞察 -->
+  <section class="slide">
+    <div class="kicker">洞察</div>
+    <h2>所有督学产品都死在同一件事上：<br>它们只认识今天的你。</h2>
+    <div class="rule"></div>
+    <p class="lead">
+      它们不记得你三天前说过什么，<br>
+      也不记得你上周在哪里栽过跟头。<br><br>
+      所以它不认识你 —— 它只能拿规则压你。
+    </p>
+    <div class="tagline" style="font-size:2.3vw">历史不是数据，历史是关系。</div>
+    <div class="folio">03 / 08</div>
+  </section>
+
+  <!-- 4 产品流程 -->
+  <section class="slide">
+    <div class="kicker">产品</div>
+    <h2>用户只做一件事：拍一张学习截图。</h2>
+    <div class="flow">
+      <div class="step">
+        <div class="num">STEP 1</div>
+        <div><div class="name">拍图</div><div class="note">粉笔 / 华图 / 任意刷题 App 结算页</div></div>
+      </div>
+      <div class="step">
+        <div class="num">STEP 2</div>
+        <div><div class="name">识别</div><div class="note">模块 · 时长 · 题量 · 正确率 · 来源 App</div></div>
+      </div>
+      <div class="step">
+        <div class="num">STEP 3</div>
+        <div><div class="name">确认卡</div><div class="note">每个字段都能改。<br>不假装 AI 不出错，<br>只保证出错不用重来</div></div>
+      </div>
+      <div class="step">
+        <div class="num">STEP 4</div>
+        <div><div class="name">仓鼠五态</div><div class="note">44 天学习史的累积结果，<br>不是随机动画</div></div>
+      </div>
+      <div class="step key">
+        <div class="num">STEP 5</div>
+        <div><div class="name">缺口行</div><div class="note">整个产品的命门</div></div>
+      </div>
+    </div>
+    <div class="folio">04 / 08</div>
+  </section>
+
+  <!-- 5 缺口行 -->
+  <section class="slide">
+    <div class="kicker">命门</div>
+    <h2>不是完成率，是「你还欠几次」。</h2>
+    <div class="gapbox">
+      <div class="cell"><div class="k">本周目标</div><div class="v">5 次</div></div>
+      <div class="div"></div>
+      <div class="cell"><div class="k">你学了</div><div class="v">3 次</div></div>
+      <div class="div"></div>
+      <div class="cell"><div class="k">还欠</div><div class="v alert">2 次</div></div>
+    </div>
+    <p class="gapnote">
+      完成率是给人打分的，缺口是给下一次用的。<br>
+      所以我们不显示完成率、不显示排名、不显示连续天数 —— 只告诉你今晚还差什么。
+    </p>
+    <div class="folio">05 / 08</div>
+  </section>
+
+  <!-- 6 记忆（全场最值钱） -->
+  <section class="slide dark">
+    <div class="kicker">长期记忆 · 产品的分界线</div>
+    <div class="memo">
+      <div class="col">
+        <div class="quote">
+          「资料分析我一定能拿下」
+          <small>41 天前 · 9 月 20 日 · 那天的正确率 73%</small>
+        </div>
+      </div>
+      <div class="col">
+        <div class="acc">
+          <span>41 天后 · 本周资料分析正确率</span>
+          <b class="down">48%</b>
+        </div>
+        <div class="ask">
+          产品没有骂你，也没有安慰你。<br>
+          它只问了一句：<br>
+          <em>你当时少算了什么？</em>
+        </div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:5vh;font-size:1.75vw">
+      这句话任何通用大模型都问不出来 —— 它需要同时记住：41 天前的一句原话、那天的正确率、这周的正确率。<br>
+      三个数，缺一个都问不出来。
+    </p>
+    <div class="folio">06 / 08</div>
+  </section>
+
+  <!-- 7 壁垒 -->
+  <section class="slide">
+    <div class="kicker">为什么大厂不做</div>
+    <h2>因为这件事的前提，<br>是承认用户会失败。</h2>
+    <div class="rows">
+      <div class="row"><div class="n">01</div><div class="t"><b>承认你会断签</b><span>　—— 而不是把它变成"连续天数徽章"</span></div></div>
+      <div class="row"><div class="n">02</div><div class="t"><b>承认你会熬夜</b><span>　—— 然后让你别学了，而不是发你一枚勋章</span></div></div>
+      <div class="row"><div class="n">03</div><div class="t"><b>承认你会说了不算</b><span>　—— 然后把 41 天前那句话翻出来问你</span></div></div>
+    </div>
+    <p class="lead" style="margin-top:4vh">
+      大厂的 KPI 不允许产品承认用户会失败 —— 它们必须让你觉得自己很棒，才能让你续费。<br>
+      我们卖的不是情绪，是督学；<b>情绪是我们交付督学的方式。</b>
+    </p>
+    <div class="tech">
+      <div><b>36</b> 个后端测试全绿</div>
+      <div><b>9 / 9</b> 前后端字段对拍一致</div>
+      <div>日期可钉死回放</div>
+      <div>非法输入全部拦截</div>
+    </div>
+    <div class="folio">07 / 08</div>
+  </section>
+
+  <!-- 8 收尾 -->
+  <section class="slide end">
+    <div class="kicker">收尾</div>
+    <h1>打卡软件记得你打过卡。<br>我们记得你答应过什么。</h1>
+    <div class="next">
+      <div><b>下一版 · 周报</b>数据已齐，只差一页渲染</div>
+      <div><b>下一版 · 目标设定</b>周目标由用户自己定，接口已预留</div>
+      <div><b>下一版 · 缺口状态机</b>待补 / 已清零 / 已放弃，绝不设"逾期惩罚"</div>
+    </div>
+    <div class="folio">08 / 08</div>
+  </section>
+
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  let i = 0;
+  function go(n){
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('on', k === i));
+  }
+  document.addEventListener('keydown', (e) => {
+    if (['ArrowRight','ArrowDown',' ','PageDown','Enter'].includes(e.key)) { e.preventDefault(); go(i + 1); }
+    if (['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(e.key)) { e.preventDefault(); go(i - 1); }
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(slides.length - 1);
+  });
+  document.addEventListener('click', (e) => go(i + (e.clientX > window.innerWidth / 2 ? 1 : -1)));
+  // 排练用：pitch.html?p=6 直达第 6 页
+  const startAt = parseInt(new URLSearchParams(location.search).get('p') || '1', 10) - 1;
+  if (!Number.isNaN(startAt)) go(startAt);
+</script>
+</body>
+</html>
