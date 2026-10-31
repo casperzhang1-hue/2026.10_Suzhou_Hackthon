@@ -1,16 +1,6 @@
-# 工具产物
-.workbuddy/
-.wbapp_*.genie
-
-# 依赖与构建
 node_modules/
 dist/
-build/
-
-# 测试截图（真实学习截图，含个人信息，不入库）
-testshots/
-*.tmp
-
-# 系统文件
+.vite/
+*.log
 .DS_Store
-Thumbs.db
+mock-server/data/records.json
