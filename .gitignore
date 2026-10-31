@@ -3,4 +3,4 @@ dist/
 .vite/
 *.log
 .DS_Store
-mock-server/data/records.json
+**/mock-server/data/records.json

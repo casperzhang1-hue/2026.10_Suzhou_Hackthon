@@ -63,15 +63,23 @@ def _merge_day(recs: list[dict]) -> dict:
 
 
 def replay(records: list[dict], today: date) -> dict:
-    """从第一条记录起逐日回放到 today，返回今日 compute_daily_state 的结果。"""
+    """从第一条记录起逐日回放，返回"现在该显示的状态"。
+
+    ⚠️ 今天没记录时不结算今天（settle_to = 昨天）。
+    一天还没过完就按 completion=0 结算，等于每天早上打开 App 宠物都是「蔫了」——
+    这正是产品明令禁止的惩罚式反馈（PRD 05 反焦虑护栏）。今天一有记录入库，
+    下一次调用就会把今天算进来。
+    """
     days = _by_day(records)
     if not days:
-        return {"state": None, "last_study": None, "missed_days": None}
+        return {"state": None, "last_study": None, "missed_days": None, "settled_to": None}
+    pending_today = today not in days
+    settle_to = today - timedelta(days=1) if pending_today else today
     vitality = INITIAL_VITALITY
     missed = 0
     state = None
     d = min(days)
-    while d <= today:
+    while d <= settle_to:
         if d in days:
             sig = _merge_day(days[d])
             missed = 0
@@ -85,7 +93,10 @@ def replay(records: list[dict], today: date) -> dict:
         )
         vitality = state["vitality"]
         d += timedelta(days=1)
-    return {"state": state, "last_study": max(k for k in days if k <= today), "missed_days": missed}
+    # 对外汇报的「连续没学天数」把今天算进去（今天确实还没学），但状态本身按已结算的日子算
+    reported_missed = missed + (1 if pending_today else 0)
+    return {"state": state, "last_study": max(k for k in days if k <= today),
+            "missed_days": reported_missed, "settled_to": settle_to}
 
 
 def _week_start(d: date) -> date:
@@ -93,8 +104,17 @@ def _week_start(d: date) -> date:
 
 
 def gap_of(records: list[dict], today: date) -> dict:
+    """本周缺口 = 目标天数 - 本周**真的学了**的天数。
+
+    ⚠️ 只数有时长的日子。seed 里 10-27 / 10-29 是「本周没学」（时长 0），
+    按"有记录就算完成"会算成全勤、owed=0，演示里那句「本周欠 2 次」就没了。
+    """
     start = _week_start(today)
-    done = len({d for d in _by_day(records) if start <= d <= today})
+    studied = {
+        d for d, recs in _by_day(records).items()
+        if start <= d <= today and _merge_day(recs)["minutes"] > 0
+    }
+    done = len(studied)
     return {"week_target": WEEK_TARGET, "week_done": done, "owed": max(0, WEEK_TARGET - done)}
 
 
@@ -105,10 +125,12 @@ def today_view(records: list[dict], today: date) -> dict:
     if st is None:
         # 新用户：没有任何记录
         return {"date": today.isoformat(), "has_record": False, "pet_state": "sleep", "vitality": INITIAL_VITALITY,
-                "user_state": None, "phrase_level": "normal", "gap": gap_of(records, today)}
+                "user_state": None, "phrase_level": "normal", "gap": gap_of(records, today),
+                "pending_today": True, "missed_days": 0}
     return {
         "date": today.isoformat(),
         "has_record": today in days,
+        "pending_today": today not in days,
         "pet_state": st["pet_state"],
         "vitality": st["vitality"],
         "user_state": st["user_state"],

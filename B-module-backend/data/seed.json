@@ -1,0 +1,1013 @@
+{
+  "records": [
+    {
+      "record_id": "seed_0001",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-17",
+      "event_time": "21:10",
+      "duration_minutes": 35,
+      "modules": [
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 9
+        },
+        {
+          "name": "资料分析",
+          "question_count": 10,
+          "correct_count": 6
+        }
+      ],
+      "total_questions": 25,
+      "accuracy": 0.6,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0002",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-18",
+      "event_time": "21:00",
+      "duration_minutes": 48,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 20,
+          "correct_count": 14
+        },
+        {
+          "name": "判断推理",
+          "question_count": 10,
+          "correct_count": 6
+        }
+      ],
+      "total_questions": 30,
+      "accuracy": 0.67,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0003",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-19",
+      "event_time": "20:40",
+      "duration_minutes": 62,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 18
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 10
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.7,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0004",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-20",
+      "event_time": "20:30",
+      "duration_minutes": 70,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 22
+        },
+        {
+          "name": "判断推理",
+          "question_count": 10,
+          "correct_count": 7
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.72,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0005",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-21",
+      "event_time": "21:20",
+      "duration_minutes": 55,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 17
+        },
+        {
+          "name": "数量关系",
+          "question_count": 10,
+          "correct_count": 5
+        }
+      ],
+      "total_questions": 35,
+      "accuracy": 0.63,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0006",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-22",
+      "event_time": "20:20",
+      "duration_minutes": 75,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 23
+        },
+        {
+          "name": "常识判断",
+          "question_count": 15,
+          "correct_count": 9
+        }
+      ],
+      "total_questions": 45,
+      "accuracy": 0.71,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0007",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-23",
+      "event_time": "20:50",
+      "duration_minutes": 68,
+      "modules": [
+        {
+          "name": "言语理解",
+          "question_count": 20,
+          "correct_count": 15
+        },
+        {
+          "name": "资料分析",
+          "question_count": 20,
+          "correct_count": 14
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.72,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0008",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-24",
+      "event_time": null,
+      "duration_minutes": 0,
+      "modules": [],
+      "total_questions": 0,
+      "accuracy": null,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0009",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-25",
+      "event_time": "21:00",
+      "duration_minutes": 58,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 18
+        },
+        {
+          "name": "言语理解",
+          "question_count": 10,
+          "correct_count": 7
+        }
+      ],
+      "total_questions": 35,
+      "accuracy": 0.71,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0010",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-26",
+      "event_time": "20:30",
+      "duration_minutes": 80,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 24
+        },
+        {
+          "name": "判断推理",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 45,
+      "accuracy": 0.78,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0011",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-27",
+      "event_time": "21:10",
+      "duration_minutes": 65,
+      "modules": [
+        {
+          "name": "言语理解",
+          "question_count": 25,
+          "correct_count": 19
+        },
+        {
+          "name": "资料分析",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.75,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0012",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-28",
+      "event_time": "20:10",
+      "duration_minutes": 90,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 35,
+          "correct_count": 27
+        },
+        {
+          "name": "数量关系",
+          "question_count": 15,
+          "correct_count": 9
+        }
+      ],
+      "total_questions": 50,
+      "accuracy": 0.72,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0013",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-29",
+      "event_time": "20:50",
+      "duration_minutes": 72,
+      "modules": [
+        {
+          "name": "判断推理",
+          "question_count": 25,
+          "correct_count": 18
+        },
+        {
+          "name": "资料分析",
+          "question_count": 20,
+          "correct_count": 15
+        }
+      ],
+      "total_questions": 45,
+      "accuracy": 0.73,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0014",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-09-30",
+      "event_time": "20:00",
+      "duration_minutes": 85,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 25
+        },
+        {
+          "name": "常识判断",
+          "question_count": 20,
+          "correct_count": 14
+        }
+      ],
+      "total_questions": 50,
+      "accuracy": 0.78,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0015",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-01",
+      "event_time": "22:40",
+      "duration_minutes": 210,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 60,
+          "correct_count": 33
+        },
+        {
+          "name": "数量关系",
+          "question_count": 40,
+          "correct_count": 18
+        }
+      ],
+      "total_questions": 100,
+      "accuracy": 0.51,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0016",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-02",
+      "event_time": "21:30",
+      "duration_minutes": 30,
+      "modules": [
+        {
+          "name": "常识判断",
+          "question_count": 15,
+          "correct_count": 10
+        }
+      ],
+      "total_questions": 15,
+      "accuracy": 0.67,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0017",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-03",
+      "event_time": "21:00",
+      "duration_minutes": 45,
+      "modules": [
+        {
+          "name": "言语理解",
+          "question_count": 20,
+          "correct_count": 14
+        }
+      ],
+      "total_questions": 20,
+      "accuracy": 0.7,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0018",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-04",
+      "event_time": "20:50",
+      "duration_minutes": 60,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 17
+        },
+        {
+          "name": "判断推理",
+          "question_count": 10,
+          "correct_count": 6
+        }
+      ],
+      "total_questions": 35,
+      "accuracy": 0.66,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0019",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-05",
+      "event_time": "20:40",
+      "duration_minutes": 70,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 21
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 45,
+      "accuracy": 0.71,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0020",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-06",
+      "event_time": "20:30",
+      "duration_minutes": 78,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 23
+        },
+        {
+          "name": "判断推理",
+          "question_count": 15,
+          "correct_count": 10
+        }
+      ],
+      "total_questions": 45,
+      "accuracy": 0.73,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0021",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-07",
+      "event_time": "21:00",
+      "duration_minutes": 66,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 18
+        },
+        {
+          "name": "常识判断",
+          "question_count": 15,
+          "correct_count": 10
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.7,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0022",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-08",
+      "event_time": "20:40",
+      "duration_minutes": 74,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 21
+        },
+        {
+          "name": "数量关系",
+          "question_count": 15,
+          "correct_count": 8
+        }
+      ],
+      "total_questions": 45,
+      "accuracy": 0.64,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0023",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-09",
+      "event_time": "20:50",
+      "duration_minutes": 68,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 19
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 45,
+      "accuracy": 0.67,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0024",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-10",
+      "event_time": "20:40",
+      "duration_minutes": 72,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 18
+        },
+        {
+          "name": "判断推理",
+          "question_count": 15,
+          "correct_count": 10
+        }
+      ],
+      "total_questions": 45,
+      "accuracy": 0.62,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0025",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-11",
+      "event_time": "21:10",
+      "duration_minutes": 60,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 15
+        },
+        {
+          "name": "常识判断",
+          "question_count": 15,
+          "correct_count": 10
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.62,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0026",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-12",
+      "event_time": null,
+      "duration_minutes": 0,
+      "modules": [],
+      "total_questions": 0,
+      "accuracy": null,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0027",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-13",
+      "event_time": "21:00",
+      "duration_minutes": 55,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 14
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.62,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0028",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-14",
+      "event_time": "20:50",
+      "duration_minutes": 64,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 13
+        },
+        {
+          "name": "判断推理",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.6,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0029",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-15",
+      "event_time": "21:00",
+      "duration_minutes": 58,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 13
+        },
+        {
+          "name": "数量关系",
+          "question_count": 10,
+          "correct_count": 6
+        }
+      ],
+      "total_questions": 35,
+      "accuracy": 0.54,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0030",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-16",
+      "event_time": "20:40",
+      "duration_minutes": 70,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 30,
+          "correct_count": 15
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 12
+        }
+      ],
+      "total_questions": 45,
+      "accuracy": 0.6,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0031",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-17",
+      "event_time": "20:50",
+      "duration_minutes": 62,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 13
+        },
+        {
+          "name": "常识判断",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.6,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0032",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-18",
+      "event_time": "20:40",
+      "duration_minutes": 66,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 12
+        },
+        {
+          "name": "判断推理",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.57,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0033",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-19",
+      "event_time": "21:10",
+      "duration_minutes": 54,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 13
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.6,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0034",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-20",
+      "event_time": "21:00",
+      "duration_minutes": 60,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 12
+        },
+        {
+          "name": "数量关系",
+          "question_count": 10,
+          "correct_count": 6
+        }
+      ],
+      "total_questions": 35,
+      "accuracy": 0.51,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0035",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-21",
+      "event_time": "21:00",
+      "duration_minutes": 58,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 12
+        },
+        {
+          "name": "常识判断",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.57,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0036",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-22",
+      "event_time": "20:50",
+      "duration_minutes": 64,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 12
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 12
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.6,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0037",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-23",
+      "event_time": "21:00",
+      "duration_minutes": 56,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 12
+        },
+        {
+          "name": "判断推理",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.57,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0038",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-24",
+      "event_time": null,
+      "duration_minutes": 0,
+      "modules": [],
+      "total_questions": 0,
+      "accuracy": null,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0039",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-25",
+      "event_time": null,
+      "duration_minutes": 0,
+      "modules": [],
+      "total_questions": 0,
+      "accuracy": null,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0040",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-26",
+      "event_time": "20:50",
+      "duration_minutes": 62,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 12
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.57,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0041",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-27",
+      "event_time": null,
+      "duration_minutes": 0,
+      "modules": [],
+      "total_questions": 0,
+      "accuracy": null,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0042",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-28",
+      "event_time": "20:50",
+      "duration_minutes": 62,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 12
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.57,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0043",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-29",
+      "event_time": null,
+      "duration_minutes": 0,
+      "modules": [],
+      "total_questions": 0,
+      "accuracy": null,
+      "manual": false,
+      "seed": true
+    },
+    {
+      "record_id": "seed_0044",
+      "user_id": "demo_zhang",
+      "source_app": "粉笔",
+      "event_date": "2026-10-30",
+      "event_time": "20:50",
+      "duration_minutes": 62,
+      "modules": [
+        {
+          "name": "资料分析",
+          "question_count": 25,
+          "correct_count": 12
+        },
+        {
+          "name": "言语理解",
+          "question_count": 15,
+          "correct_count": 11
+        }
+      ],
+      "total_questions": 40,
+      "accuracy": 0.57,
+      "manual": false,
+      "seed": true
+    }
+  ],
+  "memories": [
+    {
+      "id": "m1",
+      "type": "promise",
+      "days_ago": 41,
+      "said_at": "2026-09-20",
+      "quote": "资料分析我一定能拿下",
+      "module": "资料分析",
+      "then_accuracy": 0.73,
+      "week_accuracy": 0.48,
+      "question": "你当时少算了什么？"
+    },
+    {
+      "id": "m2",
+      "type": "event",
+      "days_ago": 30,
+      "said_at": "2026-10-01",
+      "quote": "那天你学到凌晨两点",
+      "detail": "210 分钟，60 题对 33 题。仓鼠那天是「疲惫」。"
+    },
+    {
+      "id": "m3",
+      "type": "event",
+      "days_ago": 37,
+      "said_at": "2026-09-24",
+      "quote": "断了一天，第二天就回来了",
+      "detail": "断签只掉 25%，回来立刻回暖 40%。"
+    }
+  ]
+}
