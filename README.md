@@ -12,7 +12,7 @@
 |---|---|---|---|
 | A · 前端 | 上传 → 确认卡 → 今日屏 / 记忆屏 / 出分日屏，宠物五态 | ✅ **已接 `/api/today`（缺口行读真数据、断网回落）+ 识别升 r5**（15:28，`1684481`） | [`A-module-frontend/`](A-module-frontend/) |
 | **C · AI 学习截图识别** | 识别截图中的学习数据（来源 App / 时长 / 题量 / 正确率 / 模块明细），输出标准 JSON + 鼓励等级 | ✅ **已完成 v1.1-r5，验收通过（10/10 跑批）** | **[`C-module-recognition/`](C-module-recognition/)** |
-| B · 后端与状态引擎 | `POST /api/records` 入库、`GET /api/today` 今日状态（含缺口行）、`GET /api/memories`；状态引擎移植自 A 原型并对拍 | ✅ FastAPI + **36 个测试通过**（29 原有 + 4 集成 + 3 对拍） | **[`B-module-backend/`](B-module-backend/)** |
+| B · 后端与状态引擎 | `POST /api/records` 入库、`GET /api/today` 今日状态（含缺口行）、`GET /api/memories`；状态引擎移植自 A 原型并对拍 | ✅ FastAPI + **40 个测试通过**（29 原有 + 4 集成 + 3 对拍 + 4 去重/CORS） | **[`B-module-backend/`](B-module-backend/)** |
 | D · 数据与素材 | seed.json（45 天）、路演逐字稿、pitch.pdf、fallback.mp4 | 🔴 进行中 | [`D-module-materials/`](D-module-materials/) |
 
 > 各模块负责人把自己的代码放进对应目录，**只动自己的目录**；跨模块的接口契约以
@@ -28,7 +28,7 @@
 
 | 分支 | 负责人 | 独有内容 | 处理 |
 |---|---|---|---|
-| `Taoyu_Chen` | B · 陶宇 | FastAPI 后端 + 状态引擎 + 36 个 pytest + golden 对拍数据 | ✅ 已合并 |
+| `Taoyu_Chen` | B · 陶宇 | FastAPI 后端 + 状态引擎 + 40 个 pytest + golden 对拍数据 | ✅ 已合并 |
 | `Surui_Cao` | A · 曹苏睿 | 仅分支 README 横幅（A 的代码早就在 main） | ✅ 已合并，横幅已删 |
 | `nina_chen` | C · Nina | 无（已在 main） | ✅ 已包含 |
 | `Yuchen_Zhang` | D · 张宇辰 | 无（已在 main） | ✅ 已包含 |
@@ -53,9 +53,11 @@ cd A-module-frontend/mock-server && node server.js    # 零依赖，8787 端口�
 | 目录 | 解决什么 |
 |---|---|
 | `A-module-frontend/mock-server/` | B 交付前，前端有后端可接，全链路能跑（B 已交付，现作兜底） |
-| `A-module-frontend/seed/` | 45 天自洽演示数据，D 的 seed 可直接替换 |
+| `A-module-frontend/seed/` | 45 天自洽演示数据（副本，内容与 D 的 `seed.json` 一致） |
 | `A-module-frontend/contract/` | 三接口字段表，B 照此实现 |
 | `A-module-frontend/hamster-kit/` | ★ 仓鼠五态素材（CSS + JS + 透明 WebP），全队统一形象入口 |
+
+> **seed 唯一源：`D-module-materials/seed.json`。** 改数据只改这份，再同步到 `A-module-frontend/seed/`、`A-module-frontend/mock-server/data/`；B 的 `B-module-backend/data/seed.json` 用 `D-module-materials/tools/seed_to_backend.py` 重新生成（格式不同，不能直接拷）。
 
 路演主演示图 → `A-module-frontend/test-images/test5.jpg`（10 张里唯一不带 `OLD_SCREENSHOT` 黄条的）
 
@@ -66,7 +68,7 @@ cd A-module-frontend/mock-server && node server.js    # 零依赖，8787 端口�
 ```bash
 cd B-module-backend
 python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pytest -q                          # 36 个测试
+.venv/bin/python -m pytest -q                          # 40 个测试
 .venv/bin/python -m uvicorn app.main:app --port 8000   # 起服务
 ```
 
@@ -84,7 +86,7 @@ python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
 ├── docs/                        ← PRD v1.1 / 验收清单 / 四人任务卡 / 完整方案
 ├── prototype/                   ← SVG 版原型 Demo（历史参考）
 ├── A-module-frontend/           ← A：Vue 工程 + 仓鼠素材 + 原型 + mock 服务 + seed + 接口契约
-├── B-module-backend/            ← B：FastAPI 后端 + 状态引擎 + 36 个 pytest + golden 对拍
+├── B-module-backend/            ← B：FastAPI 后端 + 状态引擎 + 40 个 pytest + golden 对拍
 ├── C-module-recognition/        ← C：AI 学习截图识别（负责人：Nina）
 │   ├── README.md                ← C 模块完整文档（从这里看起）
 │   ├── recognize.js             ← 核心交付物：单文件识别模块

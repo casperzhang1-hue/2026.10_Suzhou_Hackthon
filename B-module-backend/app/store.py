@@ -6,7 +6,10 @@
 import json
 import os
 import threading
+from datetime import datetime
 from pathlib import Path
+
+DEDUPE_WINDOW_SECONDS = 120  # 同一张图在窗口内重复提交视为同一条记录
 
 
 class Store:
@@ -27,8 +30,19 @@ class Store:
                 self.memories = list(data.get("memories", []))
                 return
 
+    @staticmethod
+    def _is_duplicate(a: dict, b: dict) -> bool:
+        if not (a.get("confirmed_at") and b.get("confirmed_at")):
+            return False
+        same = all(a.get(k) == b.get(k) for k in ("user_id", "event_date", "modules", "total_questions"))
+        gap = abs(datetime.fromisoformat(a["confirmed_at"]) - datetime.fromisoformat(b["confirmed_at"]))
+        return same and gap.total_seconds() < DEDUPE_WINDOW_SECONDS
+
     def add_record(self, rec: dict) -> dict:
         with self._lock:
+            for old in self.records:
+                if self._is_duplicate(old, rec):
+                    return old
             rec = {**rec, "record_id": f"rec_{len(self.records) + 1:04d}"}
             self.records.append(rec)
             self._flush()

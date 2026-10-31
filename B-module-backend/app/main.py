@@ -20,10 +20,10 @@ def get_today() -> date:
 
 def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
     app = FastAPI(title="kaogong-hamster-server")
-    # 本服务无鉴权（单用户演示）。CORS 仅放开本地前端，勿直接暴露到公网。
+    # 本服务无鉴权（单用户演示）。CORS 仅放开本地任意端口的前端，勿直接暴露到公网。
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )

@@ -89,3 +89,33 @@ def test_memories_from_seed(tmp_path, monkeypatch):
     (tmp_path / "seed.json").write_text(json.dumps({"records": [], "memories": [item]}, ensure_ascii=False), encoding="utf-8")
     c = TestClient(main.create_app(tmp_path))
     assert c.get("/api/memories").json() == {"items": [item]}
+
+
+def test_post_records_dedupes_same_screenshot_resubmit(client, tmp_path):
+    p = _payload("2026-10-31")
+    first = client.post("/api/records", json=p).json()
+    p2 = {**p, "confirmed_at": "2026-10-31T12:21:10.000Z"}      # 同一张图，39 秒后重复提交
+    second = client.post("/api/records", json=p2).json()
+    assert second["record_id"] == first["record_id"]
+    saved = json.loads((tmp_path / "store.json").read_text(encoding="utf-8"))
+    assert len(saved["records"]) == 1
+
+
+def test_post_records_keeps_same_content_when_far_apart(client):
+    p = _payload("2026-10-31")
+    a = client.post("/api/records", json=p).json()
+    b = client.post("/api/records", json={**p, "confirmed_at": "2026-10-31T12:25:00.000Z"}).json()
+    assert a["record_id"] != b["record_id"]
+
+
+def test_post_records_keeps_different_content(client):
+    a = client.post("/api/records", json=_payload("2026-10-31", correct=26)).json()
+    b = client.post("/api/records", json=_payload("2026-10-31", correct=20, total=40)).json()
+    assert a["record_id"] != b["record_id"]
+
+
+def test_cors_allows_any_local_port(client):
+    r = client.options("/api/today", headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET"})
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    r = client.options("/api/today", headers={"Origin": "http://evil.example.com", "Access-Control-Request-Method": "GET"})
+    assert "access-control-allow-origin" not in r.headers

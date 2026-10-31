@@ -7,7 +7,7 @@
 | 文件 | 说明 | 状态 |
 |---|---|---|
 | `seed.json` | 45 天自洽演示数据（44 条日记录 + 3 条记忆），与 `A-module-frontend/seed/` 同源 | ✅ |
-| `tools/seed_to_backend.py` | A 的 `days[]` → B 的 `records[]` 格式转换器，B 的 36 测试依赖它 | ✅ |
+| `tools/seed_to_backend.py` | A 的 `days[]` → B 的 `records[]` 格式转换器，B 的 40 个测试依赖它 | ✅ |
 | [`路演逐字稿.md`](路演逐字稿.md) | 6 分钟主讲稿，约 980 字，含配时、停顿点、超时砍段顺序、忘词锚点 | ✅ |
 | [`pitch.html`](pitch.html) / [`pitch.pdf`](pitch.pdf) | 8 页投屏版。HTML 支持方向键/空格翻页、`?p=6` 直达某页；PDF 每页一张 16:9 | ✅ |
 | [`录屏脚本_90秒.md`](录屏脚本_90秒.md) | fallback 视频的分镜表，含录制前 checklist 与 45 秒降级版 | ✅（视频本体待录，见「待办」） |
