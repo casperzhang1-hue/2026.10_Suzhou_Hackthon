@@ -89,6 +89,12 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
             return {"ok": True, "saved": False, "reason": "这句话里没有值得记的事"}
         return {"ok": True, "saved": True, "memory": persona._memory_view(item)}
 
+    @app.delete("/api/memories/{memory_id}")
+    def delete_memory_api(memory_id: str):
+        """忘掉一条。记错的事比忘掉更麻烦——名字记错了它就一直叫错。"""
+        gone = store.remove_memory(memory_id)
+        return {"ok": True, "deleted": gone, "id": memory_id}
+
     # ---- 数据库能力（SQL 聚合，不是内存遍历） ----
     @app.get("/api/health")
     def health():

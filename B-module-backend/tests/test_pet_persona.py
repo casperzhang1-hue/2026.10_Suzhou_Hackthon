@@ -526,7 +526,8 @@ def test_闸_问账时不许把账安到他嘴上():
     facts = _facts("今天怎么样")
     for bad in ("130分钟，60%对。你自己跟我说的。", "130分钟，你亲口说的。"):
         ok, why = P.check_reply(bad, facts=facts, user_text="今天怎么样")
-        assert not ok and "说成是他跟你说的" in why
+        assert not ok and "安到了他嘴上" in why
+    # 「记录里写着」是真的，不能一起拦——拦真话等于把它逼回兜底
     ok, why = P.check_reply("130分钟，记录里就这么写的。", facts=facts, user_text="今天怎么样")
     assert ok, why
 
@@ -537,6 +538,131 @@ def test_闸_问账时不许把账安到他嘴上():
     facts = _facts("今天怎么样")
     for bad in ("130分钟，60%对。你自己跟我说的。", "130分钟，你亲口说的。"):
         ok, why = P.check_reply(bad, facts=facts, user_text="今天怎么样")
-        assert not ok and "说成是他跟你说的" in why
+        assert not ok and "安到了他嘴上" in why
+    # 「记录里写着」是真的，不能一起拦——拦真话等于把它逼回兜底
     ok, why = P.check_reply("130分钟，记录里就这么写的。", facts=facts, user_text="今天怎么样")
     assert ok, why
+
+
+# ---------- 名字：谁是谁 ----------
+# 用户截图：「团团我叫什么」→「你叫我团团时，我耳朵尖尖的」；
+# 「你应该叫我什么」→「你叫我团团就行啦」。两问问的都是**他的**名字，
+# 答的都是它自己的名字。流利，但答的是另一件事。
+
+def test_名字_问我叫什么走称呼模式():
+    for q in ("团团我叫什么", "你应该叫我什么", "你还记得我叫什么吗", "我是谁"):
+        facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text=q)
+        assert facts["mode"] == "address", q
+
+
+def test_名字_问你叫什么走身份模式():
+    for q in ("你叫什么", "你是谁", "团团你叫什么名字"):
+        facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text=q)
+        assert facts["mode"] == "identity", q
+
+
+def test_名字_忘了就是忘了_不许编():
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text="你应该叫我什么")
+    assert facts["known_name"] is None
+    ok, why = P.check_reply("团团是你喊我的名字呀，别的都不行。", facts=facts,
+                            user_text="你应该叫我什么")
+    assert not ok and "我自己的名字" in why
+    ok, why = P.check_reply("唔，你还没告诉我你叫什么呢，说给我听听呀。", facts=facts,
+                            user_text="你应该叫我什么")
+    assert ok, why
+
+
+def test_名字_记住了就要叫出来():
+    with_name = [{"quote": "你叫林一", "type": "name", "name": "林一", "days_ago": 1}]
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=with_name, text="你应该叫我什么")
+    assert facts["known_name"] == "林一"
+    ok, why = P.check_reply("当然叫林一呀，我记着呢。", facts=facts, user_text="你应该叫我什么")
+    assert ok, why
+    ok, deny = P.check_reply("你还没告诉我你叫什么呢。", facts=facts, user_text="你应该叫我什么")
+    assert not ok and "却没叫出来" in deny
+
+
+def test_名字_问你是谁_得报自己的名字():
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text="你是谁")
+    ok, why = P.check_reply("唔，我听着呢。", facts=facts, user_text="你是谁")
+    assert not ok and "自己的名字" in why
+    ok, why = P.check_reply("我叫团团，一只爱藏瓜子的仓鼠。", facts=facts, user_text="你是谁")
+    assert ok, why
+
+
+def test_名字_接口_他报了名字_下次就能叫出来(client, monkeypatch):
+    monkeypatch.setattr(pet_llm, "chat", lambda *a, **k: "唔，好呀。")
+    client.post("/api/pet/say", json={"text": "我叫林一", "history": []})
+    d = client.post("/api/pet/say", json={"text": "你应该叫我什么", "history": []}).json()
+    assert d["facts"]["mode"] == "address"
+    assert d["facts"]["known_name"] == "林一"
+
+
+# ---------- 闲聊里的两类实问：能干什么、要不要好 ----------
+# 用户截图之外的同类病：问「你能干什么」，答「我帮你把瓜子藏进腮帮子啦」；
+# 问「你喜欢我吗」，答「我把你瓜子藏了三天」。都答得挺可爱，但一个字没答他。
+
+def test_能做什么_得说得出能做什么():
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text="你能干什么")
+    assert facts["mode"] == "capability" and len(facts["skills"]) >= 2
+    ok, why = P.check_reply("我帮你把瓜子藏进腮帮子啦，想吃就来摸摸我。", facts=facts,
+                            user_text="你能干什么")
+    assert not ok and "小动作" in why
+    ok, why = P.check_reply("你给我看截图，我就知道你做了多少；你说过的事我也记着。",
+                            facts=facts, user_text="你能干什么")
+    assert ok, why
+
+
+def test_关系_得正面答():
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text="你喜欢我吗")
+    assert facts["mode"] == "relation"
+    ok, why = P.check_reply("我把你瓜子藏了三天啦。", facts=facts, user_text="你喜欢我吗")
+    assert not ok and "没正面答" in why
+    ok, why = P.check_reply("喜欢呀，我天天在这儿等你。", facts=facts, user_text="你喜欢我吗")
+    assert ok, why
+
+
+# ---------- 闲聊里的两类实问：能干什么、要不要好 ----------
+# 用户截图之外的同类病：问「你能干什么」，答「我帮你把瓜子藏进腮帮子啦」；
+# 问「你喜欢我吗」，答「我把你瓜子藏了三天」。都答得挺可爱，但一个字没答他。
+
+def test_能做什么_得说得出能做什么():
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text="你能干什么")
+    assert facts["mode"] == "capability" and len(facts["skills"]) >= 2
+    ok, why = P.check_reply("我帮你把瓜子藏进腮帮子啦，想吃就来摸摸我。", facts=facts,
+                            user_text="你能干什么")
+    assert not ok and "小动作" in why
+    ok, why = P.check_reply("你给我看截图，我就知道你做了多少；你说过的事我也记着。",
+                            facts=facts, user_text="你能干什么")
+    assert ok, why
+
+
+def test_关系_得正面答():
+    facts = P.build_facts(today=TODAY, modules=MODULES, memories=MEMORIES, text="你喜欢我吗")
+    assert facts["mode"] == "relation"
+    ok, why = P.check_reply("我把你瓜子藏了三天啦。", facts=facts, user_text="你喜欢我吗")
+    assert not ok and "没正面答" in why
+    ok, why = P.check_reply("喜欢呀，我天天在这儿等你。", facts=facts, user_text="你喜欢我吗")
+    assert ok, why
+
+
+def test_名字_忘了能删_删了就不叫了(client, monkeypatch):
+    """他改名了、或者当初手滑，库里得能删。留着一条过期的名字，它会一直叫错。"""
+    monkeypatch.setattr(pet_llm, "chat", lambda *a, **k: "唔。")
+    client.post("/api/pet/say", json={"text": "我叫林一", "history": []})
+    items = client.get("/api/memories").json()["items"]
+    name_item = [m for m in items if m.get("type") == "name"][-1]
+    assert client.delete(f"/api/memories/{name_item['id']}").json()["deleted"] is True
+    d = client.post("/api/pet/say", json={"text": "你应该叫我什么", "history": []}).json()
+    assert d["facts"]["known_name"] is None
+
+
+def test_名字_忘了能删_删了就不叫了(client, monkeypatch):
+    """他改名了、或者当初手滑，库里得能删。留着一条过期的名字，它会一直叫错。"""
+    monkeypatch.setattr(pet_llm, "chat", lambda *a, **k: "唔。")
+    client.post("/api/pet/say", json={"text": "我叫林一", "history": []})
+    items = client.get("/api/memories").json()["items"]
+    name_item = [m for m in items if m.get("type") == "name"][-1]
+    assert client.delete(f"/api/memories/{name_item['id']}").json()["deleted"] is True
+    d = client.post("/api/pet/say", json={"text": "你应该叫我什么", "history": []}).json()
+    assert d["facts"]["known_name"] is None

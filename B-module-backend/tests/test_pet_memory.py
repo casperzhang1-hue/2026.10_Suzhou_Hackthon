@@ -352,3 +352,67 @@ def test_视觉解析_认识的应用名照留():
     seen = pet_vision.parse('{"lines":["粉笔","总用时 23 分 51 秒"],"app":"粉笔","minutes":23,'
                             '"modules":[]}')
     assert seen["app"] == "粉笔"
+
+
+# ---------- 名字：他叫什么，我该叫他什么 ----------
+# 用户截图里问「团团我叫什么」「你应该叫我什么」，两次都答成「你叫我团团」——
+# 把它自己的名字当成了他的名字。这两问要的是**他的**名字，答对靠两件事：
+# 名字记得住、忘了敢说忘了。
+
+def test_名字_他说自己叫什么才抽得出来():
+    assert M.extract_name("我叫林一") == "林一"
+    assert M.extract_name("我名字叫林一，你记住") == "林一"
+    assert M.extract_name("叫我小一就行") == "小一"
+
+
+def test_名字_提问里没有名字():
+    """「我叫什么」抽出来的「什么」要是被当成名字，它下次就会喊他「什么」。"""
+    for q in ("我叫什么", "团团我叫什么", "你还记得我叫什么吗", "我叫什么名字"):
+        assert M.extract_name(q) is None, q
+
+
+def test_名字_口语里的叫我一声不算名字():
+    assert M.extract_name("叫我一声") is None
+    assert M.extract_name("叫我一起呗") is None
+
+
+def test_名字_记进库之后取得出来_改名按新的叫():
+    items = [
+        {"type": "name", "name": "林一", "quote": "我叫林一"},
+        {"type": "name", "name": "小一", "quote": "以后叫我小一"},
+    ]
+    assert M.current_name(items) == "小一"
+    assert M.current_name([]) is None
+    assert M.current_name([{"type": "feeling", "quote": "我累了"}]) is None
+
+
+# ---------- 名字：他叫什么，我该叫他什么 ----------
+# 用户截图里问「团团我叫什么」「你应该叫我什么」，两次都答成「你叫我团团」——
+# 把它自己的名字当成了他的名字。这两问要的是**他的**名字，答对靠两件事：
+# 名字记得住、忘了敢说忘了。
+
+def test_名字_他说自己叫什么才抽得出来():
+    assert M.extract_name("我叫林一") == "林一"
+    assert M.extract_name("我名字叫林一，你记住") == "林一"
+    assert M.extract_name("叫我小一就行") == "小一"
+
+
+def test_名字_提问里没有名字():
+    """「我叫什么」抽出来的「什么」要是被当成名字，它下次就会喊他「什么」。"""
+    for q in ("我叫什么", "团团我叫什么", "你还记得我叫什么吗", "我叫什么名字"):
+        assert M.extract_name(q) is None, q
+
+
+def test_名字_口语里的叫我一声不算名字():
+    assert M.extract_name("叫我一声") is None
+    assert M.extract_name("叫我一起呗") is None
+
+
+def test_名字_记进库之后取得出来_改名按新的叫():
+    items = [
+        {"type": "name", "name": "林一", "quote": "我叫林一"},
+        {"type": "name", "name": "小一", "quote": "以后叫我小一"},
+    ]
+    assert M.current_name(items) == "小一"
+    assert M.current_name([]) is None
+    assert M.current_name([{"type": "feeling", "quote": "我累了"}]) is None

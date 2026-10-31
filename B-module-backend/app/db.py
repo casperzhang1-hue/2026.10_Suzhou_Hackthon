@@ -187,6 +187,17 @@ def insert_memory(conn: sqlite3.Connection, item: dict) -> None:
     conn.commit()
 
 
+def delete_memory(conn: sqlite3.Connection, memory_id: str) -> int:
+    """删掉一条记忆。返回删了几条（0 表示本来就没有）。
+
+    他得能删——记错的事比忘掉更麻烦。尤其是名字这种：他改名了、或者当初手滑，
+    库里留一条过期的，它就会一直叫错。
+    """
+    cur = conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+    conn.commit()
+    return cur.rowcount
+
+
 def append_chat(conn: sqlite3.Connection, *, user_id: str, role: str,
                 content: str, source: str | None = None) -> None:
     conn.execute(

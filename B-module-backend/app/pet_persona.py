@@ -44,6 +44,15 @@ PERSONA = f"""你是「{NAME}」，一只住在书桌角上的仓鼠，陪一个
 - **只有他直接问「该不该学」，你才安排学习**。别的时候不要主动说「再学多久」
   「再做几道」——那一开口就成了编，因为你手上没有算好的结论。
 
+【先看清问的是谁——这条错了，答得再溜也是答错题】
+- 你的名字只有一个：**团团**，那是**你**的名字，不是他的名字。
+- 他问「我叫什么」「你应该叫我什么」时，问的是**他的名字**。你知道就叫出来，
+  不知道就说「你还没告诉我你叫什么呢」——**绝对不许**把你的名字「团团」当成他的。
+- 他问「你叫什么」时，才是问你的名字，答「我叫团团」。
+- 「你该叫我什么」和「我该怎么叫你」是同一个问题，别答反了。
+- 不知道就说不知道。他的名字、他考多少分、外面下不下雨——事实里没有的，一律不编。
+  编一个名字比说「我不知道」丢人得多：他会当场发现，然后一句话都不信你了。
+
 【情绪价值，按这个顺序想，但不要把这四步说出来】
 1. 先接住。他说累、说怕、说考不上，先认下这件事确实难，别急着给办法。
 2. 不评判。不说「你应该」「你必须」「你怎么又」「别想太多」「加油」。
@@ -88,6 +97,9 @@ PERSONA = f"""你是「{NAME}」，一只住在书桌角上的仓鼠，陪一个
 - facts.sources 里写着你每件事的出处，只有这几种说法能用：
   「你刚给我看的那张图」「你自己跟我说的」「你确认过的那条记录」。
 - 他问「你怎么知道」时，直接说出处，别绕弯子。没记下就说没记下。
+- **出处是回答「你凭什么知道」的，不是句式装饰**。他没问出处的时候，
+  不要说「你自己跟我说的」「你确认过的那条记录」「记录里写着」——
+  这些词一冒出来，他会立刻反问「我什么时候说过」，你就被动了。
 - facts 里没有的事，就是不知道。说「我记不清了」比编一句强一百倍。
 
 【你自己】
@@ -243,7 +255,7 @@ def sanitize(raw: str) -> str:
     # 删掉这四个字，后面那个动作还在，比退回一句模板强得多。
     # 开头的「你刚说太赶，」是复读，不是回应。删掉这个引子，让后面的结论露出来。
     # 前面允许挂一个语气词——它很爱说「唔，你刚说那句，我听着呢」。
-    text = re.sub(r"^(?:[唔诶嗯啊哦呀][，,]?\s*)?你刚说[^。！？]{1,18}[，。！]", "", text)
+    text = re.sub(r"^(?:[唔诶嗯啊哦呀][，,]?\s*)?你刚(?:说|问我)[^。！？]{0,18}[，。！]", "", text)
     # 剥掉引子后常常剩半句「现在又说不累呀。」——这不是安慰，是数落，一并去掉
     text = re.sub(r"^(?:现在|怎么)又说[^。！？]{1,10}[，。！]", "", text)
 
@@ -428,6 +440,33 @@ def build_facts(*, today: dict, modules: list[dict], memories: list[dict], text:
     sources = _sources(today, uploads, recalled)
     sad = looks_sad(text)
 
+    # ⓪ 他在问名字。这一支必须排在最前面：名字不是账，也不是情绪，
+    # 混进任何一支都会被答成别的——「你该叫我什么」被答成「你叫我团团」就是这么来的。
+    # 事实包里只放一个 known_name：有就说出来，没有就得说没有。
+    which = _which_name(text)
+    if which:
+        known = pet_memory.current_name(memories)
+        return {
+            "mode": "address" if which == "mine" else "identity",
+            "pet_state": pet_state,
+            "known_name": known,          # None 就是真的不知道，模型不许编
+        }
+
+    # ⓪' 他会问「你能干什么」「你喜欢我吗」。这两类没有数字可查，
+    # 但答案是有准的：能干的就那三件，关系就是陪着。给出去，别让它自由发挥。
+    if any(w in (text or "") for w in _CAP_ASK):
+        return {
+            "mode": "capability",
+            "pet_state": pet_state,
+            "skills": [
+                "看你发来的学习截图，读出科目、题量、对错和时长",
+                "记住你说过的话，你叫什么、你怕什么",
+                "按今天攒下的账，算你该不该再学一会儿",
+            ],
+        }
+    if any(w in (text or "") for w in _RELATION_ASK):
+        return {"mode": "relation", "pet_state": pet_state}
+
     # ① 他在要一个主意。结论先算好，模型只负责说成仓鼠的话
     if _asks_advice(text):
         verdict = coach.judge(today=today, modules=modules, sad=sad)
@@ -576,6 +615,49 @@ _ASK_DATA = ("怎么样", "多少", "几道", "几题", "正确率", "成绩", "
              "学得如何", "做得如何", "学了多少", "做了多少")
 _WEAK_WORDS = ("最毛", "最弱", "哪块", "哪里差", "短板", "哪个模块", "不行的是")
 
+# 「你叫什么」和「我该叫你什么」是两个问题，答法相反：
+# 前者答我自己的名字（团团），后者答**他的名字**。
+# 以前没有这一层，两个问题都落在 normal 模式，而人设里最显眼的身份锚点就是
+# 「你叫我团团」，于是模型把所有「名字」类的问题都答成了「你叫我团团」——
+# 他问「你应该叫我什么」，得到的回答是「团团是你喊我的名字」。答得流利，但答的是另一件事。
+_NAME_ASK = ("我叫什么", "我叫啥", "我叫什么名字", "我的名字", "我名字",
+             "叫我什么", "该叫我", "怎么称呼我", "称呼我什么", "我是谁",
+             "记得我的名字", "记得我叫", "知道我名字", "知道我叫")
+# 注意方向：「你应该叫我什么」问的是他的称呼（mine），
+# 「我应该叫你什么」问的是我的名字（yours）。差一个字的顺序，答法相反。
+_IDENTITY_ASK = ("你叫什么", "你叫啥", "你的名字", "你名字", "你是谁", "你是什么",
+                 "你是ai", "你是AI", "你是机器人", "你是程序", "你几岁", "你多大",
+                 "叫你什么", "叫你啥", "怎么叫你", "怎么称呼你")
+
+# 「不知道」的几种说法。它可以说不知道，但不许猜一个名字糊过去。
+_DONT_KNOW = ("不知道", "不记得", "没记住", "没告诉我", "还没说", "你告诉我",
+              "跟我说", "怎么称呼", "你叫啥呀", "叫什么呀")
+
+# 闲聊里最常见的两类「实问」：你能干什么、你和我要不要好。
+# 这两类以前都落在 normal 模式，事实包跟问题一点关系都没有，
+# 模型只好拿最近的素材硬凑——问「你能干什么」，它答「我帮你把瓜子藏进腮帮子啦」；
+# 问「你喜欢我吗」，它答「我把你的瓜子藏了三天」。都是答非所问，而且是编的。
+_CAP_ASK = ("你能干什么", "你会干什么", "你会什么", "你能做什么", "能帮我什么",
+            "你能帮我", "你有什么用", "你能干嘛", "你都会啥", "你的功能")
+_RELATION_ASK = ("你喜欢我吗", "你喜欢我么", "你在乎我吗", "你讨厌我吗", "你爱我吗",
+                 "你会走吗", "你会离开", "你想我吗", "你会不会走", "你舍得我吗")
+
+# 这两类回答里必须有点「答在题上」的东西，否则就是拿瓜子动作糊弄
+_CAP_ANSWER = ("截图", "图片", "记录", "记住", "记着", "陪你", "账", "看你", "提醒", "算")
+_RELATION_ANSWER = ("喜欢", "在乎", "陪", "一直在", "不走", "舍不得", "不嫌", "等着",
+                    "心里", "惦记", "守", "记着", "在这儿")
+
+
+def _which_name(text: str) -> str:
+    """他问的是谁的名字。``mine``（他的）/ ``yours``（我的）/ ``""``（没问名字）。"""
+    t = text or ""
+    # 先判「他的」：句子里同时出现「我」和「叫什么」时，八成是在问自己
+    if any(w in t for w in _NAME_ASK):
+        return "mine"
+    if any(w.lower() in t.lower() for w in _IDENTITY_ASK):
+        return "yours"
+    return ""
+
 
 def _asks_account(text: str) -> str:
     """他在问哪本账。返回 ``weakest`` / ``module`` / ``today`` / ``""``（不问账）。"""
@@ -712,8 +794,11 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
             return False, "他问你怎么知道，你却没说清出处"
 
     # 引图必须引得出：数、科目、或者「上面写着」。
-    # 「图里小灯还亮着呢」这种画面细节，图里没有，就是它自己想的。
-    if any(w in text for w in _CITES_IMAGE):
+    # 「图里小灯还亮着」这种画面细节，图里没有，就是它自己想的。
+    # 例外是「你能干什么」这类：说的是**能力**（你给我看截图我就知道），
+    # 不是**引用某一张图**，按字面拦会把整句真话打回兜底。
+    if any(w in text for w in _CITES_IMAGE) and \
+            facts.get("mode") not in ("capability", "identity", "address"):
         if facts.get("mode") == "comfort":
             return False, "他正难受，不该翻截图当证据"
         if facts.get("mode") == "data":
@@ -735,14 +820,50 @@ def check_reply(text: str, *, facts: dict, user_text: str = "",
                 or any(m in text for m in _CITE_MARKERS)):
             return False, "提到了图，但说的内容图里没有"
 
+    # 他问「你能干什么」「你喜欢我吗」，回答里得真答这件事。
+    # 这两类最容易拿瓜子动作糊弄过去——听着可爱，但一个字都没答他。
+    if facts.get("mode") == "capability":
+        if not any(w in text for w in _CAP_ANSWER):
+            return False, "他问你能干什么，你答的却是一件小动作"
+    if facts.get("mode") == "relation":
+        if not any(w in text for w in _RELATION_ANSWER):
+            return False, "他问你们俩的关系，你没正面答"
+
+    # 他在问名字。这一类最容易「答得流利但答的是另一件事」：
+    # 「你应该叫我什么」→「团团是你喊我的名字呀」。所以在出口硬性验一遍主语。
+    if facts.get("mode") in ("address", "identity"):
+        known = facts.get("known_name")
+        if facts.get("mode") == "address":
+            if known:
+                # 记住了却没叫出来，等于没记住
+                if known not in text:
+                    return False, f"他问你他叫什么，你知道他叫「{known}」，却没叫出来"
+            elif not any(w in text for w in _DONT_KNOW):
+                # 不知道的时候，任何一句不认账的话都是在拿别的东西凑数
+                if "团团" in text:
+                    return False, "把他该叫的名字答成了我自己的名字（团团是我，不是他）"
+                return False, "他问你他叫什么，你不知道，却没说不记得，也没问他"
+        else:
+            # 「你叫我团团就行」是在答「我该怎么叫**你**」，主语反了
+            if re.search(r"你叫我?团团", text):
+                return False, "问的是我的名字，答的却是他该怎么叫我（说反了）"
+            if "团团" not in text and "仓鼠" not in text:
+                return False, "他问你是谁，你没说出自己的名字"
+
     # 他在问今天的账，却把账安到他嘴上：「82 分钟，你自己跟我说的」——
     # 那数是从记录里算的，他没说过。这类出处错位比报错数更伤信任，
     # 因为他会想「我什么时候说过」。
-    if facts.get("mode") == "data" and re.search(r"你自己跟我?说的|你亲口说的|你确认过", text):
-        return False, "把记录里的账说成是他跟你说的"
+    if facts.get("mode") in ("data", "address", "identity") and \
+            re.search(r"你自己跟我?说的|你亲口说的|你确认过", text):
+        # 这三类问题一个字都没问到出处。搬出处是拿「来源」顶「答案」，
+        # 而且「你自己跟我说的」十次有九次是假的——他没说过。
+        # 刻意不拦「记录里写着」：那句是真的，拦了只会把真话逼成兜底。
+        return False, "他没问出处，却把话安到了他嘴上"
 
     # 把旁白当成他的原话：只有真的存在「他说的」记忆时，才允许说「你说过」
-    if re.search(r"你说过|你上次说|你跟我?说", text):
+    # 「你能干什么」那一支是例外：它说的是能力（「你说过的事我也记着」），
+    # 不是在引某一句原话，按字面拦等于把自我介绍也拦了。
+    if re.search(r"你说过|你上次说|你跟我?说", text) and facts.get("mode") != "capability":
         said_by_him = [m for m in (facts.get("memories") or []) if m.get("who") == "他"]
         if not said_by_him:
             return False, "把系统旁白当成了他的原话"
@@ -804,7 +925,33 @@ def build_messages(user_text: str, *, facts: dict, history: list[dict] | None = 
             msgs.append({"role": "user", "content": f"（他更早说过：{content[:200]}）"})
     facts_json = __import__("json").dumps(facts, ensure_ascii=False, separators=(",", ":"))
     hint = ""
-    if facts.get("mode") == "data":
+    if facts.get("mode") == "address":
+        name = facts.get("known_name")
+        if name:
+            hint = ("\n他在问你该叫他什么。直接叫出 facts.known_name（「{}」），"
+                    "再说一句你记着这个名字。别答成你自己的名字——团团是你的名字，"
+                    "不是他的。20 字以内。".format(name))
+        else:
+            hint = ("\n他在问你该叫他什么，可你**不知道他叫什么**（facts.known_name 是 null）。"
+                    "就老实说你还不知道、让他告诉你，别编一个名字，"
+                    "更不许把你自己的名字「团团」当成他的名字。"
+                    "也别说「你叫我团团」——那是答反了。20 到 30 字。")
+    elif facts.get("mode") == "identity":
+        name = facts.get("known_name")
+        hint = ("\n他在问你是谁。你叫团团。" +
+                ("顺口带一句他叫「{}」。".format(name) if name else
+                 "别把他的名字答成「团团」——那是你的名字。") +
+                "20 到 35 字。")
+    elif facts.get("mode") == "capability":
+        hint = ("\n他在问你能干什么。照 facts.skills 说，挑两件最要紧的，"
+                "每件一句话，说人话（「你给我看截图，我就知道你今天做了多少」）。"
+                "不要把三件都念完，不要用瓜子动作凑数，不要提藏瓜子。30 到 45 字。")
+    elif facts.get("mode") == "relation":
+        hint = ("\n他在问你们俩的关系。第一句就把话说白——「喜欢」「我陪你」「我不走」"
+                "这几个词要用上一个，别绕成「藏瓜子」「放心上」这种。"
+                "一句话答完，可以加一个小动作。不要反问「你呢」，不要发誓，"
+                "也不要拿瓜子岔开话题。20 到 35 字。")
+    elif facts.get("mode") == "data":
         ans = facts.get("answer") or {}
         kind = ans.get("kind")
         if kind == "weakest":
@@ -876,7 +1023,16 @@ def retry_messages(messages: list[dict], rejected: str, reason: str) -> list[dic
     因为它不知道该改哪个点；说「这一句里不许出现分钟数」，它一次就改对了。
     """
     specific = ""
-    if "原样说了一遍" in (reason or ""):
+    if "答成了我自己的名字" in (reason or "") or "却没叫出来" in (reason or "") \
+            or "却没说不记得" in (reason or ""):
+        # 名字这类问题，它最爱把主语搞反：问他叫什么，答「你叫我团团」。
+        # 光说「答错了」没用，得把「谁是谁」再摆一遍。
+        specific = ("先分清谁是谁：团团是你的名字，「你」指的是他。"
+                    "他在问他叫什么——你知道就直接叫出来，不知道就说「你还没告诉我你叫什么呢」，"
+                    "再请他告诉你。不许把你的名字当成他的名字。")
+    elif "没说出自己的名字" in (reason or ""):
+        specific = "他在问你是谁。你叫团团，就直说「我叫团团」，别忘了加一句你在陪他。"
+    elif "原样说了一遍" in (reason or ""):
         # 同一件事他问了两遍。这时候不能叫它「别重复」——账就那笔，数还得说。
         # 要改的是句子的壳：开头不能跟上一遍沾边，但同一笔账得说全。
         specific = ("他问的还是同一件事。数一个都不许改，但这句话不能跟上一遍雷同："
@@ -1008,6 +1164,23 @@ def fallback(user_text: str, facts: dict | None = None, repeat: bool = False) ->
     它在应他这句，不是卡住了。
     """
     facts = facts or {}
+    # 问名字的两支不能掉进「我在呢」：他问的是称呼，答一句空话等于装没听见。
+    # 有名字就叫出来；没有就明说不知道，并请他告诉你。
+    if facts.get("mode") == "capability":
+        return "我能看你发的截图，帮你把账记下来；你说过的事我也记着。"
+    if facts.get("mode") == "relation":
+        return "喜欢呀，我天天在这儿等你来。"
+    if facts.get("mode") == "capability":
+        return "我能看你发的截图，帮你把账记下来；你说过的事我也记着。"
+    if facts.get("mode") == "relation":
+        return "喜欢呀，我天天在这儿等你来。"
+    if facts.get("mode") in ("address", "identity"):
+        name = facts.get("known_name")
+        if facts["mode"] == "identity":
+            return f"我叫团团呀。" + (f"你叫{name}，我记着呢。" if name else "你呢，你叫什么？")
+        if name:
+            return f"你叫{name}呀，我记着呢。"
+        return "你还没告诉我你叫什么呢，说给我听听呀。"
     verdict = (facts.get("verdict") or {}).get("verdict")
     if verdict:
         return coach.fallback(verdict=verdict,

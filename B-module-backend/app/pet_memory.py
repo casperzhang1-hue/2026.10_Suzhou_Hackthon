@@ -58,6 +58,64 @@ _DENIAL = re.compile(
 
 MAX_QUOTE = 80
 
+# 他告诉我他叫什么。这一条单独抽出来，因为「你该叫我什么」这类问题
+# 只有拿到名字才答得对；没有名字就必须老实说不知道。
+# 三个句式覆盖口语里的说法：「我叫张伟」「我名字叫张伟」「叫我小伟就行」。
+_NAME_PATTERNS = (
+    re.compile(r"我的名字(?:是|叫)([^\s，。！？、,.!?]{1,6})"),
+    re.compile(r"我名字(?:是|叫)([^\s，。！？、,.!?]{1,6})"),
+    re.compile(r"我叫([^\s，。！？、,.!?]{1,6})"),
+    re.compile(r"(?:你|您)?(?:可以|就|以后|直接)?叫我([^\s，。！？、,.!?]{1,6})"),
+)
+# 抽出来的是这些，就是在问、不是在说
+_NAME_STOP = {"什么", "啥", "什么名字", "啥名字", "什么呀", "啥呀", "谁", "名字", "啥名"}
+# 抽完要剥掉的口语尾巴：「叫我小一就行」里的名字是「小一」
+_NAME_TAIL = ("就行", "就好", "好了", "吧", "呀", "啦", "哦", "喔", "呗", "啊")
+
+
+def extract_name(text: str) -> str | None:
+    """他这句话里有没有他的名字。没有就返回 None。
+
+    宁可漏记不要错记：「我叫什么」抽出来的「什么」必须挡掉，
+    不然它会把「什么」当成他的名字，下次一本正经地喊他「什么」。
+    """
+    t = (text or "").strip()
+    if not t:
+        return None
+    for pat in _NAME_PATTERNS:
+        m = pat.search(t)
+        if not m:
+            continue
+        name = m.group(1).strip("，。！？、,.!? ")
+        stripped = True
+        while stripped:                        # 尾巴可能叠两层：「小一就行啦」
+            stripped = False
+            for tail in _NAME_TAIL:
+                if name.endswith(tail) and len(name) > len(tail):
+                    name = name[: -len(tail)]
+                    stripped = True
+        if not name or name in _NAME_STOP:
+            continue
+        # 疑问词混进来的，一定是在问，不是在说（「我叫什么吗」「我叫啥」）
+        if any(w in name for w in ("什么", "啥", "谁", "吗")):
+            continue
+        if len(name) > 6:
+            continue
+        # 「叫我一起」「叫我一声」这类不是名字
+        if name.startswith(("一", "声", "一下")) or name.endswith(("一声", "一下")):
+            continue
+        return name
+    return None
+
+
+def current_name(memories: list[dict] | None) -> str | None:
+    """他现在叫什么。取最近一条名字记忆——他改名了就按新的叫。"""
+    for m in reversed(list(memories or [])):
+        if m.get("type") == "name" and m.get("name"):
+            return m["name"]
+    return None
+
+
 
 def _norm(text: str) -> str:
     return re.sub(r"\s+", "", (text or "")).strip("，。！？、 ")
@@ -113,7 +171,8 @@ def extract(text: str, *, known_modules: list[str] | None = None) -> dict | None
     刻意不做摘要：``quote`` 存他的原话（截 80 字）。
     摘要会丢人称，而人称一丢，模型就会把旁白说成「你说过」。
     """
-    kind = classify(text)
+    name = extract_name(text)
+    kind = "name" if name else classify(text)
     if not kind:
         return None
     quote = (text or "").strip()
@@ -131,6 +190,8 @@ def extract(text: str, *, known_modules: list[str] | None = None) -> dict | None
     }
     if mod:
         item["module"] = mod
+    if name:
+        item["name"] = name          # 「你该叫我什么」只有这一个字段答得出来
     return item
 
 

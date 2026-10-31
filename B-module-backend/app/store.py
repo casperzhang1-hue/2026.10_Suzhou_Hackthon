@@ -10,8 +10,8 @@ from datetime import datetime
 from pathlib import Path
 
 from .db import (
-    Database, append_chat, import_seed, insert_memory, insert_record, insert_upload,
-    load_chat, load_memories, load_records, load_uploads,
+    Database, append_chat, delete_memory, import_seed, insert_memory, insert_record,
+    insert_upload, load_chat, load_memories, load_records, load_uploads,
 )
 
 DEDUPE_WINDOW_SECONDS = 120  # 同一张图在窗口内重复提交视为同一条记录
@@ -84,6 +84,14 @@ class Store:
             insert_memory(self.db.conn, item)
             self.memories.append(item)
             return item
+
+    def remove_memory(self, memory_id: str) -> bool:
+        """删一条。内存里那份也要同步删，否则它这一轮还「记得」。"""
+        with self.db.lock:
+            n = delete_memory(self.db.conn, memory_id)
+            if n:
+                self.memories = [m for m in self.memories if m.get("id") != memory_id]
+            return bool(n)
 
     # ---- 对话 ----
 
