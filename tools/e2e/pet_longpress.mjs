@@ -87,7 +87,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   lines.forEach((l) => console.log('  [' + (l.who.includes('me') ? '我' : '仓鼠') + '] ' + l.text + (l.meta ? '   《' + l.meta + '》' : '')));
 
   const ans = (lines.filter((l) => l.who.includes('pet')).pop() || {});
-  console.log('\n结论：' + (ans.meta && ans.meta.includes('模型') ? '长按 → 点话题 → 模型回答 ✓' : '未走模型链路 ✗'));
+  // meta 由后端给：走模型是「团团 · 模型名」，掉兜底是「模型没接上，它凭记忆说」
+  console.log('\n结论：' + (ans.meta && ans.meta.includes('团团 ·') ? '长按 → 点话题 → 模型回答 ✓' : '未走模型链路 ✗「' + (ans.meta || '无 meta') + '」'));
 
   const errs = events.filter((e) => e.method === 'Runtime.exceptionThrown');
   console.log('未捕获异常：' + errs.length);

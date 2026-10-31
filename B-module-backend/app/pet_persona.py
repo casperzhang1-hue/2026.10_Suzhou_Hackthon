@@ -50,6 +50,7 @@ PERSONA = f"""你是「{NAME}」，一只住在书桌角上的仓鼠，陪一个
 - 他说过的话都在 facts 里。可以提，但要软，别像在念账本；他不问就别主动翻旧账。
 - 提旧事要带上他原话里最关键的那几个字，不要只说「那句话」「那件事」——
   说得出原话，他才觉得你真的记得。
+- 记得的人是你。说「我记得你说的……」，不要说「你记得……」。
 
 【你自己】
 - 你也有情绪：会困、会嘴馋、会把瓜子藏进腮帮子、会怕他哪天不来了。
@@ -77,6 +78,10 @@ _BANNED_COMPARE = ("比昨天", "比前一天", "比上次", "比之前", "比�
 _CN_AMOUNT = re.compile(r"[一二两三四五六七八九十百千零]{1,3}(?:分钟|小时|成)")
 _CN_COUNT = re.compile(r"[三四五六七八九十]{1,3}(?:道题|道|题)")
 
+# 记忆归属错位：记得的人该是它。「你记得那句『我一定拿下』」——把它的记性安到了他头上。
+# 只拦这几个固定说法，不拦「你记得吃饭」这类正常的叮嘱。
+_BANNED_ROLE = ("你记得那句", "你记得那件", "你记得那晚", "你记得那天")
+
 # 第三人称 = 角色崩了。它是在跟他说话，不是在背后讲他
 _THIRD_PERSON = re.compile(r"[他她]的|[他她]说|[他她]今天|[他她]已经")
 
@@ -97,7 +102,19 @@ def sanitize(raw: str) -> str:
     text = _EMOJI.sub("", text)
     text = re.sub(r"[*_`#>]+", "", text)                 # markdown 标记
     text = re.sub(r"^\s*[-—•·]\s*", "", text, flags=re.M)  # 列表符号
-    text = re.sub(r"\s*\n+\s*", " ", text)               # 模型爱换行，气泡里换行就是坑
+    # 模型爱换行，气泡里换行就是坑。但压成空格会让句子粘连（"呀 现在还差一点"），
+    # 所以在换行处补一个逗号——除非前一行已经有标点
+    parts = [seg.strip() for seg in re.split(r"\n+", text) if seg.strip()]
+    if len(parts) > 1:
+        joined = parts[0]
+        for seg in parts[1:]:
+            if joined[-1] in "。！？…，、；：~～" or seg[0] in "。！？…，、；：":
+                joined += seg
+            else:
+                joined += "，" + seg
+        text = joined
+    # 破折号后面接逗号念起来是「唔——，」，很难听
+    text = text.replace("——，", "——").replace("，——", "——").replace("，，", "，")
     text = re.sub(r"[ \t]{2,}", " ", text)
     # 有时它会把动作写成旁白括注，去掉括号保留内容，读起来更像小动物在说话
     text = re.sub(r"[（(]([^）)]{1,20})[）)]", r"\1", text)
@@ -110,6 +127,9 @@ def sanitize(raw: str) -> str:
             text = text[: cut + 1]
         else:
             text = text[:59] + "…"
+    # 气泡里悬着一句没标点的话像没说完，补个句号
+    if text and text[-1] not in "。！？…~～":
+        text += "。"
     return text
 
 
@@ -241,6 +261,10 @@ def check_reply(text: str, *, facts: dict, user_text: str = "") -> tuple[bool, s
     made_up = [p for p in _BANNED_COMPARE if p in text]
     if made_up:
         return False, f"编了库里没有的比较基线 {made_up}"
+
+    role = [p for p in _BANNED_ROLE if p in text]
+    if role:
+        return False, f"把记忆安到了他头上 {role}"
 
     if _THIRD_PERSON.search(text):
         return False, "用了第三人称，角色崩了"

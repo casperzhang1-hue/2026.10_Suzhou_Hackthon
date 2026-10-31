@@ -47,14 +47,32 @@ MEMORIES = [
 
 # ---------- 洗格式 ----------
 
-def test_洗格式_去掉markdown和表情和换行():
+def test_洗格式_去掉markdown和表情():
     raw = "**唔**，我在呢 😊\n\n- 瓜子给你\n- 别怕"
-    assert P.sanitize(raw) == "唔，我在呢 瓜子给你 别怕"
+    assert P.sanitize(raw) == "唔，我在呢，瓜子给你，别怕。"
+
+
+def test_洗格式_换行处补逗号而不是压成空格():
+    """压成空格会得到「我在呢 你慢慢说」，气泡里看着像两个残句。"""
+    assert P.sanitize("我在呢\n你慢慢说") == "我在呢，你慢慢说。"
+
+
+def test_洗格式_上一行有标点就不再补逗号():
+    assert P.sanitize("唔，我在呢。\n你慢慢说") == "唔，我在呢。你慢慢说。"
+
+
+def test_洗格式_结尾没标点就补一个():
+    assert P.sanitize("你撑住了") == "你撑住了。"
 
 
 def test_洗格式_括号旁白去掉括号保留内容():
     # 气泡里出现「（拱你一下）」像剧本，读起来不像小动物在说话
-    assert P.sanitize("（拱你一下）我在呢") == "拱你一下我在呢"
+    assert P.sanitize("（拱你一下）我在呢") == "拱你一下我在呢。"
+
+
+def test_洗格式_破折号后面不留逗号():
+    """模型爱写「唔——」再换行，补逗号会变成「唔——，」，念起来很别扭。"""
+    assert P.sanitize("唔——\n我在这儿") == "唔——我在这儿。"
 
 
 def test_洗格式_三个点是中文省略号():
@@ -154,6 +172,17 @@ def test_闸_拦下中文写法的数字():
 def test_闸_拦下第三人称():
     ok, why = P.check_reply("他说今天很累", facts=_facts(), user_text="今天怎么样")
     assert not ok and "第三人称" in why
+
+
+def test_闸_拦下把记忆安到用户头上():
+    """「你记得那句『我一定拿下』」——记得的人该是仓鼠，不是他。"""
+    ok, why = P.check_reply("你记得那句“资料分析我一定能拿下”呀", facts=_facts(), user_text="那个承诺")
+    assert not ok and "记忆安到了他头上" in why
+
+
+def test_闸_不误杀正常叮嘱():
+    ok, _ = P.check_reply("你记得吃点东西再学呀。", facts=_facts(), user_text="我在学")
+    assert ok
 
 
 def test_闸_拦下编造的昨天():
